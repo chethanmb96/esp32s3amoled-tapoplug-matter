@@ -2,7 +2,23 @@
 
 A high-performance **Matter (CHIP) Controller & Energy Monitor Dashboard** built for the **LILYGO T-Display-S3 AMOLED** (ESP32-S3) to display real-time telemetry from the **TP-Link Tapo P116M Smart Plug**.
 
-![UI Dashboard](https://raw.githubusercontent.com/espressif/esp-matter/main/docs/_static/esp_matter_logo.png)
+[![Build & CI](https://github.com/YOUR_USERNAME/tapo-matter-display/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/tapo-matter-display/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/YOUR_USERNAME/tapo-matter-display?color=blue)](https://github.com/YOUR_USERNAME/tapo-matter-display/releases)
+
+---
+
+## 📦 Pre-Built Binaries (Quick Flash)
+
+Pre-built binaries and **all-in-one merged flash images (`tapo-matter-display-merged.bin`)** are automatically built for every release via GitHub Actions.
+
+You can flash a release in a single command without compiling:
+
+```bash
+# Flash the all-in-one merged binary at 0x0:
+esptool.py --chip esp32s3 -p COM3 -b 460800 write_flash 0x0 tapo-matter-display-merged.bin
+```
+
+Download the latest binary from the **[Releases](https://github.com/YOUR_USERNAME/tapo-matter-display/releases)** page.
 
 ---
 
