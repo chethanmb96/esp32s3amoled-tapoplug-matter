@@ -1,0 +1,49 @@
+name: Build & CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Firmware (ESP-IDF v5.5)
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Project
+        run: |
+          . /opt/esp/entrypoint.sh
+          idf.py build
+
+      - name: Generate Merged Flash Binary
+        run: |
+          . /opt/esp/entrypoint.sh
+          esptool.py --chip esp32s3 merge_bin \
+            -o build/tapo-matter-display-merged.bin \
+            --fill-flash-size 16MB \
+            --flash_mode dio \
+            --flash_freq 80m \
+            --flash_size 16MB \
+            0x0 build/bootloader/bootloader.bin \
+            0x8000 build/partition_table/partition-table.bin \
+            0x11000 build/ota_data_initial.bin \
+            0x20000 build/tapo-matter-display.bin
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tapo-matter-display-firmware
+          path: |
+            build/tapo-matter-display.bin
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+            build/ota_data_initial.bin
+            build/tapo-matter-display-merged.bin
+          if-no-files-found: error
