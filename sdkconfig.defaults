@@ -1,0 +1,56 @@
+# sdkconfig.defaults -- local configuration, NOT committed to git
+# Run ./build.sh menuconfig to set TAPO_WIFI_PASSWORD and TAPO_MATTER_SETUP_CODE
+# then build with ./build.sh build
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Matter: Pure CONTROLLER mode (no Matter server)
+# This is required so that:
+#   ESP_MATTER_COMMISSIONER_ENABLE depends on !ESP_MATTER_ENABLE_MATTER_SERVER
+# ──────────────────────────────────────────────────────────────────────────────
+# Disable the Matter device server (we are a commissioner, not a device)
+CONFIG_ESP_MATTER_ENABLE_MATTER_SERVER=n
+# Disable Thread stack (Wi-Fi only project, no Thread)
+CONFIG_ESP_MATTER_ENABLE_OPENTHREAD=n
+# Disable data model (not needed for controller-only)
+CONFIG_ESP_MATTER_ENABLE_DATA_MODEL=n
+
+# Enable controller and commissioner
+CONFIG_ESP_MATTER_CONTROLLER_ENABLE=y
+CONFIG_ESP_MATTER_COMMISSIONER_ENABLE=y
+CONFIG_ENABLE_CHIP_CONTROLLER_BUILD=y
+CONFIG_MBEDTLS_HKDF_C=y
+
+# Use Test attestation trust store (built-in test PAA certs — OK for dev)
+CONFIG_TEST_ATTESTATION_TRUST_STORE=y
+# Support Test Certification Declaration (P116M may use test CD)
+CONFIG_ESP_MATTER_COMMISSIONER_SUPPORT_TEST_CD=y
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Flash / RAM (LILYGO T-Display-S3 AMOLED = 16 MB flash, 8 MB OPI PSRAM)
+# ──────────────────────────────────────────────────────────────────────────────
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# PSRAM: Octal 80 MHz
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# CPU: 240 MHz
+CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Wi-Fi (required — Matter over Wi-Fi)
+# ──────────────────────────────────────────────────────────────────────────────
+CONFIG_ESP_WIFI_ENABLED=y
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Partition Table (Custom partitions.csv for 16 MB Flash)
+# ──────────────────────────────────────────────────────────────────────────────
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+# ──────────────────────────────────────────────────────────────────────────────
+# Main & CHIP Task Stack Size (Matter Controller / Crypto needs large stack)
+# ──────────────────────────────────────────────────────────────────────────────
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
+CONFIG_CHIP_TASK_STACK_SIZE=20480

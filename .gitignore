@@ -1,0 +1,19 @@
+# ESP-IDF build output
+build/
+.cache/
+
+# Local sdkconfig contains developer credentials (Wi-Fi password, setup code)
+sdkconfig
+sdkconfig.old
+
+# Managed components are fetched automatically by idf.py / CMake
+managed_components/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc

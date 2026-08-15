@@ -1,0 +1,32 @@
+menu "Tapo P116M Configuration"
+
+    config TAPO_WIFI_SSID
+        string "Wi-Fi SSID"
+        default "YOUR_WIFI_SSID"
+        help
+            SSID of the Wi-Fi network the P116M and ESP32-S3 share.
+
+    config TAPO_WIFI_PASSWORD
+        string "Wi-Fi Password"
+        default ""
+        help
+            Password for the Wi-Fi network.
+            This is a local secret — do not commit sdkconfig to Git.
+
+    config TAPO_MATTER_SETUP_CODE
+        string "Matter Setup Code (11-digit numeric)"
+        default ""
+        help
+            The numeric Matter setup code shown in:
+              Tapo app -> P116M -> Settings -> Matter
+            Format: NNNNN-NNNNN (11 digits with optional dash).
+            This is a local secret — do not commit sdkconfig to Git.
+
+    config TAPO_MATTER_NODE_ID
+        hex "Matter Node ID to assign to P116M"
+        default 0x1234
+        help
+            The node ID this commissioner assigns to the P116M.
+            Any unique 64-bit value works; 0x1234 is fine for development.
+
+endmenu
