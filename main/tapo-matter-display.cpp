@@ -201,6 +201,30 @@ static ui_state_t g_ui_state = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Attribute report callback — updates live UI telemetry state
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Robustly extract any TLV integer (signed/unsigned, 8/16/32/64-bit) as int64_t.
+// Returns false only if data is null or truly not an integer type.
+static bool tlv_get_int64(chip::TLV::TLVReader *data, int64_t &out)
+{
+    if (!data) return false;
+    chip::TLV::TLVType t = data->GetType();
+    switch (t) {
+    case chip::TLV::kTLVType_Boolean:   { bool b = false;     if (data->Get(b)     == CHIP_NO_ERROR) { out = b ? 1 : 0;   return true; } break; }
+    case chip::TLV::kTLVType_UnsignedInteger: {
+        uint64_t u = 0;
+        if (data->Get(u) == CHIP_NO_ERROR) { out = (int64_t)u; return true; }
+        break;
+    }
+    case chip::TLV::kTLVType_SignedInteger: {
+        int64_t s = 0;
+        if (data->Get(s) == CHIP_NO_ERROR) { out = s; return true; }
+        break;
+    }
+    default: break;
+    }
+    return false;
+}
+
 static void attr_report_cb(uint64_t node_id,
                             const chip::app::ConcreteDataAttributePath &path,
                             chip::TLV::TLVReader *data,
@@ -213,43 +237,62 @@ static void attr_report_cb(uint64_t node_id,
     g_ui_state.is_connected = true;
     g_ui_state.status_msg = "TAPO P116M";
 
-    // 1. Cluster 0x0006: OnOff
+    int64_t raw_val = 0;
+
+    // 1. Cluster 0x0006: OnOff (always boolean)
     if (path.mEndpointId == 1 && path.mClusterId == 0x0006 && path.mAttributeId == 0x0000) {
         bool val = false;
         if (data->Get(val) == CHIP_NO_ERROR) {
             g_ui_state.is_on = val;
         }
+        goto done;
     }
 
     // 2. Cluster 0x0090: Electrical Power Measurement (Matter 1.3+)
-    else if (path.mEndpointId == 1 && path.mClusterId == 0x0090) {
-        int64_t raw_val = 0;
-        if (data->Get(raw_val) == CHIP_NO_ERROR) {
-            if (path.mAttributeId == 0x0008 || path.mAttributeId == 0x000D) { // Active / RMS Power (mW)
-                g_ui_state.power_w = (float)raw_val / 1000.0f;
-                if (g_ui_state.power_w < 0.0f) g_ui_state.power_w = 0.0f;
-            } else if (path.mAttributeId == 0x000B || path.mAttributeId == 0x0004) { // RMS Voltage (mV)
-                g_ui_state.voltage_v = (float)raw_val / 1000.0f;
-            } else if (path.mAttributeId == 0x000C || path.mAttributeId == 0x0005) { // RMS Current (mA)
-                g_ui_state.current_a = (float)raw_val / 1000.0f;
-            }
+    if (path.mEndpointId == 1 && path.mClusterId == 0x0090) {
+        if (!tlv_get_int64(data, raw_val)) goto done;
+        switch (path.mAttributeId) {
+        case 0x0008: // Active Power (mW)
+        case 0x000D: // RMS Power (mW)
+            g_ui_state.power_w = (raw_val > 0) ? ((float)raw_val / 1000.0f) : 0.0f;
+            break;
+        case 0x000B: // RMS Voltage (mV)
+        case 0x0004:
+            if (raw_val > 0) g_ui_state.voltage_v = (float)raw_val / 1000.0f;
+            break;
+        case 0x000C: // RMS Current (mA)
+        case 0x0005:
+            g_ui_state.current_a = (raw_val > 0) ? ((float)raw_val / 1000.0f) : 0.0f;
+            break;
+        default: goto done;
         }
+        goto done;
     }
 
-    // 3. Cluster 0x0B04: Electrical Measurement (legacy ZCL fallback)
-    else if (path.mEndpointId == 1 && path.mClusterId == 0x0B04) {
-        int64_t raw_val = 0;
-        if (data->Get(raw_val) == CHIP_NO_ERROR) {
-            if (path.mAttributeId == 0x050B) { // Active Power (W or mW)
-                g_ui_state.power_w = (raw_val > 10000) ? (float)raw_val / 1000.0f : (float)raw_val;
-            } else if (path.mAttributeId == 0x0505) { // RMS Voltage (V)
-                g_ui_state.voltage_v = (float)raw_val;
-            } else if (path.mAttributeId == 0x0508) { // RMS Current (A or mA)
-                g_ui_state.current_a = (raw_val > 1000) ? (float)raw_val / 1000.0f : (float)raw_val;
+    // 3. Cluster 0x0B04: Electrical Measurement (legacy ZCL)
+    if (path.mEndpointId == 1 && path.mClusterId == 0x0B04) {
+        if (!tlv_get_int64(data, raw_val)) goto done;
+        switch (path.mAttributeId) {
+        case 0x050B: // Active Power (W, signed 16-bit — value in W, not mW)
+            // ZCL ElectricalMeasurement ActivePower is in units of 0.1W (AC Power Multiplier=1, divisor=10)
+            // so raw==100 means 10W. Guard: if it looks like milliwatts (>10000W) scale down.
+            if (raw_val >= 0) {
+                float w = (raw_val > 100000) ? ((float)raw_val / 1000.0f) : ((float)raw_val / 10.0f);
+                g_ui_state.power_w = w;
             }
+            break;
+        case 0x0505: // RMS Voltage (V * 10, so 2300 = 230.0V)
+            if (raw_val > 0) g_ui_state.voltage_v = (float)raw_val / 10.0f;
+            break;
+        case 0x0508: // RMS Current (mA)
+            g_ui_state.current_a = (raw_val > 0) ? ((float)raw_val / 1000.0f) : 0.0f;
+            break;
+        default: goto done;
         }
+        goto done;
     }
 
+done:
     // Refresh AMOLED Display immediately on attribute arrival
     display_ui_update(&g_ui_state);
 }
@@ -276,6 +319,97 @@ static void on_read_error(uint64_t node_id, CHIP_ERROR error)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Subscription management — restart on termination
+// ─────────────────────────────────────────────────────────────────────────────
+static volatile bool s_subscription_active = false;
+static volatile bool s_subscription_pending = false; // send_command issued, waiting for established cb
+
+static void on_subscription_established(uint64_t node_id, uint32_t sub_id)
+{
+    ESP_LOGI(TAG, "Subscription established with P116M (node=0x%llX, sub_id=%u)",
+             (unsigned long long)node_id, (unsigned)sub_id);
+    s_subscription_pending = false;
+    s_subscription_active  = true;
+}
+
+static void on_subscription_terminated(uint64_t node_id, uint32_t sub_id)
+{
+    ESP_LOGW(TAG, "Subscription to P116M TERMINATED (node=0x%llX, sub_id=%u) — will reconnect.",
+             (unsigned long long)node_id, (unsigned)sub_id);
+    s_subscription_active  = false;
+    s_subscription_pending = false;
+    // Mark connection as lost on display
+    g_ui_state.is_connected = false;
+    g_ui_state.status_msg = "RECONNECTING...";
+    display_ui_update(&g_ui_state);
+}
+
+// Start one subscribe_command for the given clusters.
+// Returns true on success.
+static bool start_subscription(uint64_t node_id)
+{
+    // Build explicit attribute paths for the 4 attributes we care about.
+    // Using explicit paths avoids subscribing to hundreds of internal Matter
+    // attributes on wildcard, which can overflow TLV buffers on the plug.
+    using namespace chip::app;
+    const int kNumPaths = 5;
+    chip::Platform::ScopedMemoryBufferWithSize<AttributePathParams> attr_paths;
+    attr_paths.Alloc(kNumPaths);
+    if (!attr_paths.Get()) {
+        ESP_LOGE(TAG, "Failed to alloc attribute paths");
+        return false;
+    }
+
+    // OnOff — relay state
+    attr_paths[0] = AttributePathParams(/*ep*/1, /*cluster*/0x0006, /*attr*/0x0000);
+    // EPM: Active Power (mW)
+    attr_paths[1] = AttributePathParams(/*ep*/1, /*cluster*/0x0090, /*attr*/0x0008);
+    // EPM: RMS Voltage (mV)
+    attr_paths[2] = AttributePathParams(/*ep*/1, /*cluster*/0x0090, /*attr*/0x000B);
+    // EPM: RMS Current (mA)
+    attr_paths[3] = AttributePathParams(/*ep*/1, /*cluster*/0x0090, /*attr*/0x000C);
+    // Legacy ZCL fallback: Active Power (Cluster 0x0B04)
+    attr_paths[4] = AttributePathParams(/*ep*/1, /*cluster*/0x0B04, /*attr*/0x050B);
+
+    chip::Platform::ScopedMemoryBufferWithSize<EventPathParams> event_paths;
+    // No event paths needed
+
+    auto *sub_cmd = chip::Platform::New<esp_matter::controller::subscribe_command>(
+        node_id,
+        std::move(attr_paths),
+        std::move(event_paths),
+        /* min_interval */ static_cast<uint16_t>(0),
+        /* max_interval */ static_cast<uint16_t>(5),   // Allow up to 5s intervals (more stable than 1s)
+        /* auto_resubscribe */ true,
+        attr_report_cb,
+        /* event_cb */ nullptr,
+        on_subscription_established,
+        on_subscription_terminated,
+        on_connect_fail,
+        /* keep_subscription */ true
+    );
+
+    if (!sub_cmd) {
+        ESP_LOGE(TAG, "Failed to allocate subscribe_command");
+        return false;
+    }
+
+    chip::DeviceLayer::PlatformMgr().LockChipStack();
+    esp_err_t err = sub_cmd->send_command();
+    chip::DeviceLayer::PlatformMgr().UnlockChipStack();
+
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "subscribe send_command returned: %s — will retry", esp_err_to_name(err));
+        chip::Platform::Delete(sub_cmd);
+        return false;
+    }
+
+    ESP_LOGI(TAG, "Subscription command sent to P116M (min=0s, max=5s, explicit 5 paths)");
+    s_subscription_pending = true;   // Block re-entry until established cb fires
+    return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Telemetry loop — subscribes to real-time attribute push stream from Tapo P116M
 // ─────────────────────────────────────────────────────────────────────────────
 static void telemetry_task(void *pvParam)
@@ -286,46 +420,55 @@ static void telemetry_task(void *pvParam)
     ESP_LOGI(TAG, " LIVE TELEMETRY TASK STARTED (Node 0x%016llX)", (unsigned long long)node_id);
     ESP_LOGI(TAG, "=================================================");
 
-    // Initial render: show telemetry dashboard immediately
+    // Initial render: show dashboard in connecting state
     g_ui_state.status_msg = "TAPO P116M";
     g_ui_state.voltage_v = 230.0f;
     display_ui_update(&g_ui_state);
 
     // Give Matter DNS-SD discovery a moment to resolve the node
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    vTaskDelay(pdMS_TO_TICKS(3000));
 
-    // Establish persistent real-time Matter subscription (min 0s, max 1s)
-    auto *sub_cmd = chip::Platform::New<esp_matter::controller::subscribe_command>(
-        node_id,
-        static_cast<uint16_t>(1),           // Endpoint 1
-        static_cast<uint32_t>(0xFFFFFFFF),  // Wildcard Clusters
-        static_cast<uint32_t>(0xFFFFFFFF),  // Wildcard Attributes
-        esp_matter::controller::SUBSCRIBE_ATTRIBUTE,
-        /* min_interval */ static_cast<uint16_t>(0),
-        /* max_interval */ static_cast<uint16_t>(1),
-        /* auto_resubscribe */ true,
-        attr_report_cb,
-        /* event_cb */ nullptr,
-        /* terminated_cb */ nullptr,
-        /* connect_fail_cb */ on_connect_fail,
-        /* keep_subscription */ true
-    );
-
-    if (sub_cmd != nullptr) {
-        chip::DeviceLayer::PlatformMgr().LockChipStack();
-        esp_err_t err = sub_cmd->send_command();
-        chip::DeviceLayer::PlatformMgr().UnlockChipStack();
-
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "subscribe send_command returned: %s", esp_err_to_name(err));
-            chip::Platform::Delete(sub_cmd);
-        } else {
-            ESP_LOGI(TAG, "Subscribed to Tapo P116M (real-time push stream active!)");
-        }
-    }
-
+    // Main subscription loop — reconnects automatically if subscription drops.
+    // Uses a pending flag so only ONE subscribe_command is ever in-flight at a time.
+    uint32_t retry_backoff_ms = 5000;
     while (1) {
-        // Redraw UI
+        if (!s_subscription_active && !s_subscription_pending) {
+            ESP_LOGI(TAG, "Attempting subscription to P116M (backoff %lu ms)...", (unsigned long)retry_backoff_ms);
+            bool ok = start_subscription(node_id);
+            if (ok) {
+                // s_subscription_pending is now true; wait up to 15s for established cb
+                // before allowing a retry. Drive the display while waiting.
+                for (int w = 0; w < 150 && s_subscription_pending && !s_subscription_active; w++) {
+                    display_ui_update(&g_ui_state);
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
+                if (s_subscription_active) {
+                    retry_backoff_ms = 5000; // Reset on success
+                } else {
+                    // Timeout waiting for established — give up this attempt and retry
+                    s_subscription_pending = false;
+                    retry_backoff_ms = (retry_backoff_ms < 30000) ? retry_backoff_ms * 2 : 30000;
+                    g_ui_state.is_connected = false;
+                    g_ui_state.status_msg = "RECONNECTING...";
+                    ESP_LOGW(TAG, "Subscription did not establish within 15s — retry in %lu ms", (unsigned long)retry_backoff_ms);
+                }
+            } else {
+                // send_command itself failed immediately — backoff and retry
+                retry_backoff_ms = (retry_backoff_ms < 30000) ? retry_backoff_ms * 2 : 30000;
+                g_ui_state.is_connected = false;
+                g_ui_state.status_msg = "RECONNECTING...";
+                // Drive display during backoff sleep
+                uint32_t slept = 0;
+                while (slept < retry_backoff_ms) {
+                    display_ui_update(&g_ui_state);
+                    vTaskDelay(pdMS_TO_TICKS(200));
+                    slept += 200;
+                }
+                continue;
+            }
+        }
+
+        // Redraw UI at 10Hz
         display_ui_update(&g_ui_state);
         vTaskDelay(pdMS_TO_TICKS(100));
     }
