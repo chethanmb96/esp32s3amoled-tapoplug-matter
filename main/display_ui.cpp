@@ -385,20 +385,20 @@ void display_ui_update(const ui_state_t *state)
 
     memset(s_fb, 0, LCD_WIDTH * LCD_HEIGHT * sizeof(uint16_t));
 
-    // 1. TOP HEADER: Status Dot + "TAPO P116M" + Borderless ON/OFF
-    // Connection Dot
+    // 1. TOP HEADER: Status Dot + "TAPO P116M" (Scale 2) + Borderless ON/OFF (Scale 3)
+    // Connection Dot (Larger)
     uint16_t dot_color = state->is_connected ? C_EMERALD : C_AMBER;
-    draw_rounded_rect(24, 20, 10, 10, 5, dot_color, dot_color);
+    draw_rounded_rect(20, 18, 12, 12, 6, dot_color, dot_color);
     
-    // Top Title: TAPO P116M
+    // Top Title: TAPO P116M (Larger Scale 2)
     const char *title_label = "TAPO P116M";
-    draw_string(42, 18, title_label, C_TEXT_MUTED, 1);
+    draw_string(40, 14, title_label, C_TEXT_MUTED, 2);
 
-    // Borderless Relay State (Top Right)
+    // Borderless Relay State: ON / OFF (Larger Scale 3)
     const char *pill_txt = state->is_on ? "ON" : "OFF";
     uint16_t pill_color = state->is_on ? C_EMERALD : C_RED;
-    int ptw = string_width(pill_txt, 2);
-    draw_string(LCD_WIDTH - ptw - 28, 16, pill_txt, pill_color, 2);
+    int ptw = string_width(pill_txt, 3);
+    draw_string(LCD_WIDTH - ptw - 20, 10, pill_txt, pill_color, 3);
 
     // 2. HERO METRIC: Active Power (Smooth Anti-Aliased Vector Readout)
     char power_buf[32];
@@ -413,13 +413,13 @@ void display_ui_update(const ui_state_t *state)
     }
 
     // Smooth typography parameters for Power Readout (Equivalent to Scale 8)
-    float char_w = 54.0f;
-    float char_h = 104.0f;
-    float stroke_r = 5.0f;
-    float gap = 12.0f;
+    float char_w = 52.0f;
+    float char_h = 98.0f;
+    float stroke_r = 4.8f;
+    float gap = 10.0f;
 
     float unit_w = 26.0f;
-    float unit_h = 42.0f;
+    float unit_h = 40.0f;
     float unit_stroke_r = 2.8f;
     float unit_gap = 6.0f;
 
@@ -438,26 +438,41 @@ void display_ui_update(const ui_state_t *state)
     float unit_y = hero_y + char_h - unit_h;
     draw_smooth_string(hero_x + num_total_w + 16.0f, unit_y, unit_w, unit_h, unit_stroke_r, unit_gap, unit_buf, C_CYAN);
 
-    // 3. BOTTOM METRICS: Borderless Voltage (No decimal) & Current
-    int bottom_y = 178;
+    // 3. BOTTOM METRICS: Voltage (Left) | Today's Consumption (Center) | Current (Right) — Scale 3
+    int bottom_lbl_y = 166;
+    int bottom_val_y = 186;
 
-    // Metric 1: Voltage (Left) — Integer without decimal
-    int v_x = 36;
-    draw_string(v_x, bottom_y, "VOLTAGE", C_TEXT_MUTED, 1);
+    // Metric 1: Voltage (Left) — Integer without decimal (Scale 3)
+    int v_x = 20;
+    draw_string(v_x, bottom_lbl_y, "VOLTAGE", C_TEXT_MUTED, 1);
 
     char volt_buf[32];
     snprintf(volt_buf, sizeof(volt_buf), "%d V", (int)roundf(state->voltage_v));
-    draw_string(v_x, bottom_y + 20, volt_buf, C_AMBER, 2);
+    draw_string(v_x, bottom_val_y, volt_buf, C_AMBER, 3);
 
-    // Metric 2: Current (Right)
+    // Metric 2: Today's Consumption (Center) — Scale 3
+    char energy_buf[32];
+    if (state->energy_kwh >= 100.0f) {
+        snprintf(energy_buf, sizeof(energy_buf), "%.1f kWh", state->energy_kwh);
+    } else {
+        snprintf(energy_buf, sizeof(energy_buf), "%.2f kWh", state->energy_kwh);
+    }
+    int e_w = string_width(energy_buf, 3);
+    int e_x = (LCD_WIDTH - e_w) / 2;
+    int e_lbl_x = (LCD_WIDTH - string_width("TODAY", 1)) / 2;
+
+    draw_string(e_lbl_x, bottom_lbl_y, "TODAY", C_TEXT_MUTED, 1);
+    draw_string(e_x, bottom_val_y, energy_buf, C_EMERALD, 3);
+
+    // Metric 3: Current (Right) — Scale 3
     char curr_buf[32];
     snprintf(curr_buf, sizeof(curr_buf), "%.2f A", state->current_a);
-    int c_w = string_width(curr_buf, 2);
-    int c_x = LCD_WIDTH - c_w - 36;
-    int c_lbl_x = LCD_WIDTH - string_width("CURRENT", 1) - 36;
+    int c_w = string_width(curr_buf, 3);
+    int c_x = LCD_WIDTH - c_w - 20;
+    int c_lbl_x = LCD_WIDTH - string_width("CURRENT", 1) - 20;
 
-    draw_string(c_lbl_x, bottom_y, "CURRENT", C_TEXT_MUTED, 1);
-    draw_string(c_x, bottom_y + 20, curr_buf, C_SKY, 2);
+    draw_string(c_lbl_x, bottom_lbl_y, "CURRENT", C_TEXT_MUTED, 1);
+    draw_string(c_x, bottom_val_y, curr_buf, C_SKY, 3);
 
     // Push full frame to AMOLED
     rm67162_push_frame(s_fb);

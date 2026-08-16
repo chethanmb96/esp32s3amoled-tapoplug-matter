@@ -15,6 +15,7 @@ typedef struct {
     float power_w;         // Active power in Watts
     float voltage_v;       // RMS voltage in Volts
     float current_a;       // RMS current in Amperes
+    float energy_kwh;      // Today's consumption / Energy in kWh
     bool is_on;            // Relay state (true = ON, false = OFF)
     bool is_connected;     // Matter connection state
     const char *status_msg;// Status text (e.g. "CONNECTED", "CONNECTING...")

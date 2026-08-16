@@ -23,10 +23,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download managed components
+      - name: Configure Target and Download managed components
         run: |
           . /opt/esp/entrypoint.sh
-          idf.py --no-ccache reconfigure
+          idf.py set-target esp32s3
 
       - name: Patch esp-matter PeerAddress namespace ambiguity
         run: |

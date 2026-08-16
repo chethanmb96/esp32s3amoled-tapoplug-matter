@@ -193,10 +193,15 @@ static ui_state_t g_ui_state = {
     .power_w = 0.0f,
     .voltage_v = 230.0f,
     .current_a = 0.0f,
+    .energy_kwh = 0.0f,
     .is_on = false,
     .is_connected = false,
     .status_msg = "CONNECTING..."
 };
+
+static float s_accumulated_energy_kwh = 0.0f;
+static float s_plug_energy_kwh = 0.0f;
+static bool s_plug_energy_reported = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Attribute report callback — updates live UI telemetry state
@@ -269,19 +274,34 @@ static void attr_report_cb(uint64_t node_id,
         goto done;
     }
 
-    // 3. Cluster 0x0B04: Electrical Measurement (legacy ZCL)
+    // 3. Cluster 0x0091: Electrical Energy Measurement (Matter 1.3+) / 0x0702 Simple Metering
+    if (path.mEndpointId == 1 && (path.mClusterId == 0x0091 || path.mClusterId == 0x0702)) {
+        if (tlv_get_int64(data, raw_val) && raw_val >= 0) {
+            // raw_val could be in mWh, Wh, or pulse units
+            if (raw_val > 1000000) {
+                s_plug_energy_kwh = (float)raw_val / 1000000.0f; // from mWh -> kWh
+            } else if (raw_val > 1000) {
+                s_plug_energy_kwh = (float)raw_val / 1000.0f;    // from Wh -> kWh
+            } else {
+                s_plug_energy_kwh = (float)raw_val;
+            }
+            s_plug_energy_reported = true;
+            g_ui_state.energy_kwh = s_plug_energy_kwh;
+        }
+        goto done;
+    }
+
+    // 4. Cluster 0x0B04: Electrical Measurement (legacy ZCL)
     if (path.mEndpointId == 1 && path.mClusterId == 0x0B04) {
         if (!tlv_get_int64(data, raw_val)) goto done;
         switch (path.mAttributeId) {
-        case 0x050B: // Active Power (W, signed 16-bit — value in W, not mW)
-            // ZCL ElectricalMeasurement ActivePower is in units of 0.1W (AC Power Multiplier=1, divisor=10)
-            // so raw==100 means 10W. Guard: if it looks like milliwatts (>10000W) scale down.
+        case 0x050B: // Active Power (W)
             if (raw_val >= 0) {
                 float w = (raw_val > 100000) ? ((float)raw_val / 1000.0f) : ((float)raw_val / 10.0f);
                 g_ui_state.power_w = w;
             }
             break;
-        case 0x0505: // RMS Voltage (V * 10, so 2300 = 230.0V)
+        case 0x0505: // RMS Voltage (V * 10)
             if (raw_val > 0) g_ui_state.voltage_v = (float)raw_val / 10.0f;
             break;
         case 0x0508: // RMS Current (mA)
@@ -348,11 +368,8 @@ static void on_subscription_terminated(uint64_t node_id, uint32_t sub_id)
 // Returns true on success.
 static bool start_subscription(uint64_t node_id)
 {
-    // Build explicit attribute paths for the 4 attributes we care about.
-    // Using explicit paths avoids subscribing to hundreds of internal Matter
-    // attributes on wildcard, which can overflow TLV buffers on the plug.
     using namespace chip::app;
-    const int kNumPaths = 5;
+    const int kNumPaths = 6;
     chip::Platform::ScopedMemoryBufferWithSize<AttributePathParams> attr_paths;
     attr_paths.Alloc(kNumPaths);
     if (!attr_paths.Get()) {
@@ -368,18 +385,19 @@ static bool start_subscription(uint64_t node_id)
     attr_paths[2] = AttributePathParams(/*ep*/1, /*cluster*/0x0090, /*attr*/0x000B);
     // EPM: RMS Current (mA)
     attr_paths[3] = AttributePathParams(/*ep*/1, /*cluster*/0x0090, /*attr*/0x000C);
+    // EEM: Cumulative Energy (Cluster 0x0091:0x0000)
+    attr_paths[4] = AttributePathParams(/*ep*/1, /*cluster*/0x0091, /*attr*/0x0000);
     // Legacy ZCL fallback: Active Power (Cluster 0x0B04)
-    attr_paths[4] = AttributePathParams(/*ep*/1, /*cluster*/0x0B04, /*attr*/0x050B);
+    attr_paths[5] = AttributePathParams(/*ep*/1, /*cluster*/0x0B04, /*attr*/0x050B);
 
     chip::Platform::ScopedMemoryBufferWithSize<EventPathParams> event_paths;
-    // No event paths needed
 
     auto *sub_cmd = chip::Platform::New<esp_matter::controller::subscribe_command>(
         node_id,
         std::move(attr_paths),
         std::move(event_paths),
         /* min_interval */ static_cast<uint16_t>(0),
-        /* max_interval */ static_cast<uint16_t>(5),   // Allow up to 5s intervals (more stable than 1s)
+        /* max_interval */ static_cast<uint16_t>(5),
         /* auto_resubscribe */ true,
         attr_report_cb,
         /* event_cb */ nullptr,
@@ -404,7 +422,7 @@ static bool start_subscription(uint64_t node_id)
         return false;
     }
 
-    ESP_LOGI(TAG, "Subscription command sent to P116M (min=0s, max=5s, explicit 5 paths)");
+    ESP_LOGI(TAG, "Subscription command sent to P116M (min=0s, max=5s, explicit 6 paths)");
     s_subscription_pending = true;   // Block re-entry until established cb fires
     return true;
 }
@@ -428,24 +446,34 @@ static void telemetry_task(void *pvParam)
     // Give Matter DNS-SD discovery a moment to resolve the node
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    // Main subscription loop — reconnects automatically if subscription drops.
-    // Uses a pending flag so only ONE subscribe_command is ever in-flight at a time.
+    uint64_t last_energy_calc_time_us = esp_timer_get_time();
     uint32_t retry_backoff_ms = 5000;
+
     while (1) {
+        // Integrate continuous energy consumption (Riemann sum Wh/kWh)
+        uint64_t now_us = esp_timer_get_time();
+        float dt_hours = (float)(now_us - last_energy_calc_time_us) / 3600000000.0f;
+        last_energy_calc_time_us = now_us;
+
+        if (g_ui_state.is_on && g_ui_state.power_w > 0.0f) {
+            s_accumulated_energy_kwh += (g_ui_state.power_w / 1000.0f) * dt_hours;
+        }
+
+        if (!s_plug_energy_reported) {
+            g_ui_state.energy_kwh = s_accumulated_energy_kwh;
+        }
+
         if (!s_subscription_active && !s_subscription_pending) {
             ESP_LOGI(TAG, "Attempting subscription to P116M (backoff %lu ms)...", (unsigned long)retry_backoff_ms);
             bool ok = start_subscription(node_id);
             if (ok) {
-                // s_subscription_pending is now true; wait up to 15s for established cb
-                // before allowing a retry. Drive the display while waiting.
                 for (int w = 0; w < 150 && s_subscription_pending && !s_subscription_active; w++) {
                     display_ui_update(&g_ui_state);
                     vTaskDelay(pdMS_TO_TICKS(100));
                 }
                 if (s_subscription_active) {
-                    retry_backoff_ms = 5000; // Reset on success
+                    retry_backoff_ms = 5000;
                 } else {
-                    // Timeout waiting for established — give up this attempt and retry
                     s_subscription_pending = false;
                     retry_backoff_ms = (retry_backoff_ms < 30000) ? retry_backoff_ms * 2 : 30000;
                     g_ui_state.is_connected = false;
@@ -453,11 +481,9 @@ static void telemetry_task(void *pvParam)
                     ESP_LOGW(TAG, "Subscription did not establish within 15s — retry in %lu ms", (unsigned long)retry_backoff_ms);
                 }
             } else {
-                // send_command itself failed immediately — backoff and retry
                 retry_backoff_ms = (retry_backoff_ms < 30000) ? retry_backoff_ms * 2 : 30000;
                 g_ui_state.is_connected = false;
                 g_ui_state.status_msg = "RECONNECTING...";
-                // Drive display during backoff sleep
                 uint32_t slept = 0;
                 while (slept < retry_backoff_ms) {
                     display_ui_update(&g_ui_state);
