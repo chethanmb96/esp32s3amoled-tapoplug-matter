@@ -161,7 +161,13 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
 {
     float x1 = x + r, x2 = x + w - r;
     float y1 = y + r, y2 = y + h - r;
+    float xm = x + w * 0.5f;
     float ym = y + h * 0.5f;
+
+    // Convert lowercase to uppercase if not specifically handled
+    if (c >= 'a' && c <= 'z' && c != 'k' && c != 'h') {
+        c = c - 'a' + 'A';
+    }
 
     switch (c) {
     case '0':
@@ -171,8 +177,8 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
         draw_smooth_segment(x1, y2, x1, y1, r, color);
         break;
     case '1':
-        draw_smooth_segment(x + w * 0.55f, y1, x + w * 0.55f, y2, r, color);
-        draw_smooth_segment(x + w * 0.2f, y + h * 0.28f, x + w * 0.55f, y1, r, color);
+        draw_smooth_segment(xm, y1, xm, y2, r, color);
+        draw_smooth_segment(x + w * 0.2f, y + h * 0.28f, xm, y1, r, color);
         draw_smooth_segment(x1, y2, x2, y2, r, color);
         break;
     case '2':
@@ -224,28 +230,168 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
         draw_smooth_segment(x2, y1, x2, y2, r, color);
         draw_smooth_segment(x1, y2, x2, y2, r, color);
         break;
-    case 'W':
-        draw_smooth_segment(x1, y1, x + w * 0.28f, y2, r, color);
-        draw_smooth_segment(x + w * 0.28f, y2, x + w * 0.5f, y + h * 0.35f, r, color);
-        draw_smooth_segment(x + w * 0.5f, y + h * 0.35f, x + w * 0.72f, y2, r, color);
-        draw_smooth_segment(x + w * 0.72f, y2, x2, y1, r, color);
+    case 'A':
+        draw_smooth_segment(x1, y2, xm, y1, r, color);
+        draw_smooth_segment(xm, y1, x2, y2, r, color);
+        draw_smooth_segment(x + w * 0.22f, ym + h * 0.1f, x + w * 0.78f, ym + h * 0.1f, r, color);
+        break;
+    case 'B':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y1, x2 - w * 0.15f, y1, r, color);
+        draw_smooth_segment(x2 - w * 0.15f, y1, x2, y1 + h * 0.25f, r, color);
+        draw_smooth_segment(x2, y1 + h * 0.25f, x1, ym, r, color);
+        draw_smooth_segment(x1, ym, x2, ym + h * 0.25f, r, color);
+        draw_smooth_segment(x2, ym + h * 0.25f, x2 - w * 0.15f, y2, r, color);
+        draw_smooth_segment(x2 - w * 0.15f, y2, x1, y2, r, color);
+        break;
+    case 'C':
+        draw_smooth_segment(x2, y1, x1, y1, r, color);
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        break;
+    case 'D':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y1, x2 - w * 0.2f, y1, r, color);
+        draw_smooth_segment(x2 - w * 0.2f, y1, x2, ym, r, color);
+        draw_smooth_segment(x2, ym, x2 - w * 0.2f, y2, r, color);
+        draw_smooth_segment(x2 - w * 0.2f, y2, x1, y2, r, color);
+        break;
+    case 'E':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(x1, ym, x2 - w * 0.2f, ym, r, color);
+        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        break;
+    case 'F':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(x1, ym, x2 - w * 0.2f, ym, r, color);
+        break;
+    case 'G':
+        draw_smooth_segment(x2, y1, x1, y1, r, color);
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        draw_smooth_segment(x2, y2, x2, ym, r, color);
+        draw_smooth_segment(x2, ym, xm, ym, r, color);
+        break;
+    case 'H':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x2, y1, x2, y2, r, color);
+        draw_smooth_segment(x1, ym, x2, ym, r, color);
+        break;
+    case 'I':
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(xm, y1, xm, y2, r, color);
+        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        break;
+    case 'J':
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(x2 - w * 0.2f, y1, x2 - w * 0.2f, y2 - h * 0.2f, r, color);
+        draw_smooth_segment(x2 - w * 0.2f, y2 - h * 0.2f, xm, y2, r, color);
+        draw_smooth_segment(xm, y2, x1, y2 - h * 0.2f, r, color);
+        break;
+    case 'K':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x2, y1, x1, ym, r, color);
+        draw_smooth_segment(x1 + w * 0.2f, ym, x2, y2, r, color);
+        break;
+    case 'L':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        break;
+    case 'M':
+        draw_smooth_segment(x1, y2, x1, y1, r, color);
+        draw_smooth_segment(x1, y1, xm, ym + h * 0.15f, r, color);
+        draw_smooth_segment(xm, ym + h * 0.15f, x2, y1, r, color);
+        draw_smooth_segment(x2, y1, x2, y2, r, color);
+        break;
+    case 'N':
+        draw_smooth_segment(x1, y2, x1, y1, r, color);
+        draw_smooth_segment(x1, y1, x2, y2, r, color);
+        draw_smooth_segment(x2, y2, x2, y1, r, color);
+        break;
+    case 'O':
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(x2, y1, x2, y2, r, color);
+        draw_smooth_segment(x2, y2, x1, y2, r, color);
+        draw_smooth_segment(x1, y2, x1, y1, r, color);
+        break;
+    case 'P':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(x2, y1, x2, ym, r, color);
+        draw_smooth_segment(x2, ym, x1, ym, r, color);
+        break;
+    case 'Q':
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(x2, y1, x2, y2, r, color);
+        draw_smooth_segment(x2, y2, x1, y2, r, color);
+        draw_smooth_segment(x1, y2, x1, y1, r, color);
+        draw_smooth_segment(xm, ym + h * 0.15f, x2 + w * 0.1f, y2 + h * 0.1f, r, color);
+        break;
+    case 'R':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(x2, y1, x2, ym, r, color);
+        draw_smooth_segment(x2, ym, x1, ym, r, color);
+        draw_smooth_segment(x1 + w * 0.3f, ym, x2, y2, r, color);
+        break;
+    case 'S':
+        draw_smooth_segment(x2, y1, x1, y1, r, color);
+        draw_smooth_segment(x1, y1, x1, ym, r, color);
+        draw_smooth_segment(x1, ym, x2, ym, r, color);
+        draw_smooth_segment(x2, ym, x2, y2, r, color);
+        draw_smooth_segment(x2, y2, x1, y2, r, color);
+        break;
+    case 'T':
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(xm, y1, xm, y2, r, color);
+        break;
+    case 'U':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        draw_smooth_segment(x2, y2, x2, y1, r, color);
         break;
     case 'V':
-        draw_smooth_segment(x1, y1, x + w * 0.5f, y2, r, color);
-        draw_smooth_segment(x + w * 0.5f, y2, x2, y1, r, color);
+        draw_smooth_segment(x1, y1, xm, y2, r, color);
+        draw_smooth_segment(xm, y2, x2, y1, r, color);
         break;
-    case 'A':
-        draw_smooth_segment(x1, y2, x + w * 0.5f, y1, r, color);
-        draw_smooth_segment(x + w * 0.5f, y1, x2, y2, r, color);
-        draw_smooth_segment(x + w * 0.25f, ym + h * 0.1f, x + w * 0.75f, ym + h * 0.1f, r, color);
+    case 'W':
+        draw_smooth_segment(x1, y1, x + w * 0.28f, y2, r, color);
+        draw_smooth_segment(x + w * 0.28f, y2, xm, y + h * 0.35f, r, color);
+        draw_smooth_segment(xm, y + h * 0.35f, x + w * 0.72f, y2, r, color);
+        draw_smooth_segment(x + w * 0.72f, y2, x2, y1, r, color);
+        break;
+    case 'X':
+        draw_smooth_segment(x1, y1, x2, y2, r, color);
+        draw_smooth_segment(x2, y1, x1, y2, r, color);
+        break;
+    case 'Y':
+        draw_smooth_segment(x1, y1, xm, ym, r, color);
+        draw_smooth_segment(x2, y1, xm, ym, r, color);
+        draw_smooth_segment(xm, ym, xm, y2, r, color);
+        break;
+    case 'Z':
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(x2, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, y2, x2, y2, r, color);
         break;
     case 'k':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
         draw_smooth_segment(x2, y + h * 0.35f, x1, ym + h * 0.1f, r, color);
         draw_smooth_segment(x1, ym + h * 0.1f, x2, y2, r, color);
         break;
+    case 'h':
+        draw_smooth_segment(x1, y1, x1, y2, r, color);
+        draw_smooth_segment(x1, ym, x2, ym, r, color);
+        draw_smooth_segment(x2, ym, x2, y2, r, color);
+        break;
     case '.':
-        draw_smooth_segment(x + w * 0.5f, y2 - r * 0.5f, x + w * 0.5f, y2 - r * 0.5f, r * 1.2f, color);
+        draw_smooth_segment(xm, y2 - r * 0.5f, xm, y2 - r * 0.5f, r * 1.2f, color);
+        break;
+    case ':':
+        draw_smooth_segment(xm, ym - h * 0.25f, xm, ym - h * 0.25f, r * 1.1f, color);
+        draw_smooth_segment(xm, ym + h * 0.25f, xm, ym + h * 0.25f, r * 1.1f, color);
         break;
     case '-':
         draw_smooth_segment(x1, ym, x2, ym, r, color);
@@ -260,14 +406,16 @@ static void draw_smooth_string(float x, float y, float char_w, float char_h, flo
     float cur_x = x;
     while (*str) {
         float w = char_w;
-        if (*str == '.' || *str == ' ') {
+        if (*str == '.' || *str == ':' || *str == ' ') {
             w = char_w * 0.35f;
-        } else if (*str == '1') {
-            w = char_w * 0.7f;
-        } else if (*str == 'W') {
-            w = char_w * 1.15f;
+        } else if (*str == '1' || *str == 'I') {
+            w = char_w * 0.6f;
+        } else if (*str == 'W' || *str == 'M') {
+            w = char_w * 1.2f;
         }
-        draw_smooth_char(cur_x, y, w, char_h, stroke_r, *str, color);
+        if (*str != ' ') {
+            draw_smooth_char(cur_x, y, w, char_h, stroke_r, *str, color);
+        }
         cur_x += w + gap;
         str++;
     }
@@ -278,12 +426,12 @@ static float smooth_string_width(float char_w, float gap, const char *str)
     float total = 0;
     while (*str) {
         float w = char_w;
-        if (*str == '.' || *str == ' ') {
+        if (*str == '.' || *str == ':' || *str == ' ') {
             w = char_w * 0.35f;
-        } else if (*str == '1') {
-            w = char_w * 0.7f;
-        } else if (*str == 'W') {
-            w = char_w * 1.15f;
+        } else if (*str == '1' || *str == 'I') {
+            w = char_w * 0.6f;
+        } else if (*str == 'W' || *str == 'M') {
+            w = char_w * 1.2f;
         }
         total += w + gap;
         str++;
@@ -357,21 +505,21 @@ void display_ui_show_splash(const char *status_text, const char *subtext)
 
     // Logo / Title
     const char *title = "TAPO P116M";
-    int tw = string_width(title, 3);
-    draw_string((LCD_WIDTH - tw) / 2, 45, title, C_CYAN, 3);
+    float tw = smooth_string_width(20.0f, 4.0f, title);
+    draw_smooth_string((LCD_WIDTH - tw) / 2.0f, 45.0f, 20.0f, 32.0f, 2.4f, 4.0f, title, C_CYAN);
 
     // Accent line
-    fill_rect(100, 100, LCD_WIDTH - 200, 2, C_CARD_BORDER);
+    fill_rect(80, 95, LCD_WIDTH - 160, 2, C_CARD_BORDER);
 
     // Status box
     if (status_text) {
-        int sw = string_width(status_text, 2);
-        draw_string((LCD_WIDTH - sw) / 2, 125, status_text, C_EMERALD, 2);
+        float sw = smooth_string_width(14.0f, 3.0f, status_text);
+        draw_smooth_string((LCD_WIDTH - sw) / 2.0f, 120.0f, 14.0f, 22.0f, 1.8f, 3.0f, status_text, C_EMERALD);
     }
 
     if (subtext) {
-        int subw = string_width(subtext, 1);
-        draw_string((LCD_WIDTH - subw) / 2, 175, subtext, C_TEXT_MUTED, 1);
+        float subw = smooth_string_width(10.0f, 2.0f, subtext);
+        draw_smooth_string((LCD_WIDTH - subw) / 2.0f, 165.0f, 10.0f, 16.0f, 1.3f, 2.0f, subtext, C_TEXT_MUTED);
     }
 
     rm67162_push_frame(s_fb);
@@ -385,20 +533,20 @@ void display_ui_update(const ui_state_t *state)
 
     memset(s_fb, 0, LCD_WIDTH * LCD_HEIGHT * sizeof(uint16_t));
 
-    // 1. TOP HEADER: Status Dot + "TAPO P116M" (Scale 2) + Borderless ON/OFF (Scale 3)
-    // Connection Dot (Larger)
+    // 1. TOP HEADER: Status Dot + "TAPO P116M" (Smooth) + Borderless ON/OFF (Smooth)
+    // Connection Dot
     uint16_t dot_color = state->is_connected ? C_EMERALD : C_AMBER;
     draw_rounded_rect(20, 18, 12, 12, 6, dot_color, dot_color);
     
-    // Top Title: TAPO P116M (Larger Scale 2)
+    // Top Title: TAPO P116M (Smooth Font)
     const char *title_label = "TAPO P116M";
-    draw_string(40, 14, title_label, C_TEXT_MUTED, 2);
+    draw_smooth_string(42.0f, 14.0f, 12.0f, 20.0f, 1.6f, 3.0f, title_label, C_TEXT_MUTED);
 
-    // Borderless Relay State: ON / OFF (Larger Scale 3)
+    // Borderless Relay State: ON / OFF (Smooth Font)
     const char *pill_txt = state->is_on ? "ON" : "OFF";
     uint16_t pill_color = state->is_on ? C_EMERALD : C_RED;
-    int ptw = string_width(pill_txt, 3);
-    draw_string(LCD_WIDTH - ptw - 20, 10, pill_txt, pill_color, 3);
+    float ptw = smooth_string_width(16.0f, 4.0f, pill_txt);
+    draw_smooth_string((float)LCD_WIDTH - ptw - 20.0f, 12.0f, 16.0f, 24.0f, 2.2f, 4.0f, pill_txt, pill_color);
 
     // 2. HERO METRIC: Active Power (Smooth Anti-Aliased Vector Readout)
     char power_buf[32];
@@ -412,9 +560,9 @@ void display_ui_update(const ui_state_t *state)
         snprintf(power_buf, sizeof(power_buf), "%d", (int)roundf(p_val));
     }
 
-    // Smooth typography parameters for Power Readout (Equivalent to Scale 8)
+    // Smooth typography parameters for Power Readout
     float char_w = 52.0f;
-    float char_h = 98.0f;
+    float char_h = 96.0f;
     float stroke_r = 4.8f;
     float gap = 10.0f;
 
@@ -425,7 +573,7 @@ void display_ui_update(const ui_state_t *state)
 
     float num_total_w = smooth_string_width(char_w, gap, power_buf);
     float unit_total_w = smooth_string_width(unit_w, unit_gap, unit_buf);
-    float total_hero_w = num_total_w + 16.0f + unit_total_w;
+    float total_hero_w = num_total_w + 14.0f + unit_total_w;
 
     float hero_x = (LCD_WIDTH - total_hero_w) / 2.0f;
     float hero_y = 48.0f;
@@ -436,45 +584,50 @@ void display_ui_update(const ui_state_t *state)
 
     // Render smooth unit aligned directly to the baseline
     float unit_y = hero_y + char_h - unit_h;
-    draw_smooth_string(hero_x + num_total_w + 16.0f, unit_y, unit_w, unit_h, unit_stroke_r, unit_gap, unit_buf, C_CYAN);
+    draw_smooth_string(hero_x + num_total_w + 14.0f, unit_y, unit_w, unit_h, unit_stroke_r, unit_gap, unit_buf, C_CYAN);
 
-    // 3. BOTTOM METRICS: Voltage (Left) | Today's Consumption (Center) | Current (Right) — Scale 3
-    int bottom_lbl_y = 166;
-    int bottom_val_y = 186;
+    // 3. BOTTOM METRICS: Voltage (Left) | Today's Consumption (Center) | Current (Right)
+    // All rendered with smooth anti-aliased vector typography without space between value & unit
+    float bottom_lbl_y = 162.0f;
+    float bottom_val_y = 184.0f;
+    float lbl_w = 9.0f, lbl_h = 14.0f, lbl_r = 1.3f, lbl_gap = 2.5f;
+    float val_w = 17.0f, val_h = 28.0f, val_r = 2.3f, val_gap = 3.5f;
 
-    // Metric 1: Voltage (Left) — Integer without decimal (Scale 3)
-    int v_x = 20;
-    draw_string(v_x, bottom_lbl_y, "VOLTAGE", C_TEXT_MUTED, 1);
+    // Metric 1: Voltage (Left) — Integer without decimal and without space e.g. "230V"
+    draw_smooth_string(20.0f, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "VOLTAGE", C_TEXT_MUTED);
 
     char volt_buf[32];
-    snprintf(volt_buf, sizeof(volt_buf), "%d V", (int)roundf(state->voltage_v));
-    draw_string(v_x, bottom_val_y, volt_buf, C_AMBER, 3);
+    snprintf(volt_buf, sizeof(volt_buf), "%dV", (int)roundf(state->voltage_v));
+    draw_smooth_string(20.0f, bottom_val_y, val_w, val_h, val_r, val_gap, volt_buf, C_AMBER);
 
-    // Metric 2: Today's Consumption (Center) — Scale 3
+    // Metric 2: Today's Consumption (Center) — Without space e.g. "0.00kWh"
     char energy_buf[32];
     if (state->energy_kwh >= 100.0f) {
-        snprintf(energy_buf, sizeof(energy_buf), "%.1f kWh", state->energy_kwh);
+        snprintf(energy_buf, sizeof(energy_buf), "%.1fkWh", state->energy_kwh);
     } else {
-        snprintf(energy_buf, sizeof(energy_buf), "%.2f kWh", state->energy_kwh);
+        snprintf(energy_buf, sizeof(energy_buf), "%.2fkWh", state->energy_kwh);
     }
-    int e_w = string_width(energy_buf, 3);
-    int e_x = (LCD_WIDTH - e_w) / 2;
-    int e_lbl_x = (LCD_WIDTH - string_width("TODAY", 1)) / 2;
+    float e_val_w = smooth_string_width(val_w, val_gap, energy_buf);
+    float e_lbl_w = smooth_string_width(lbl_w, lbl_gap, "TODAY");
+    float e_val_x = (LCD_WIDTH - e_val_w) / 2.0f;
+    float e_lbl_x = (LCD_WIDTH - e_lbl_w) / 2.0f;
 
-    draw_string(e_lbl_x, bottom_lbl_y, "TODAY", C_TEXT_MUTED, 1);
-    draw_string(e_x, bottom_val_y, energy_buf, C_EMERALD, 3);
+    draw_smooth_string(e_lbl_x, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "TODAY", C_TEXT_MUTED);
+    draw_smooth_string(e_val_x, bottom_val_y, val_w, val_h, val_r, val_gap, energy_buf, C_EMERALD);
 
-    // Metric 3: Current (Right) — Scale 3
+    // Metric 3: Current (Right) — Without space e.g. "0.00A"
     char curr_buf[32];
-    snprintf(curr_buf, sizeof(curr_buf), "%.2f A", state->current_a);
-    int c_w = string_width(curr_buf, 3);
-    int c_x = LCD_WIDTH - c_w - 20;
-    int c_lbl_x = LCD_WIDTH - string_width("CURRENT", 1) - 20;
+    snprintf(curr_buf, sizeof(curr_buf), "%.2fA", state->current_a);
+    float c_val_w = smooth_string_width(val_w, val_gap, curr_buf);
+    float c_lbl_w = smooth_string_width(lbl_w, lbl_gap, "CURRENT");
+    float c_val_x = (float)LCD_WIDTH - c_val_w - 20.0f;
+    float c_lbl_x = (float)LCD_WIDTH - c_lbl_w - 20.0f;
 
-    draw_string(c_lbl_x, bottom_lbl_y, "CURRENT", C_TEXT_MUTED, 1);
-    draw_string(c_x, bottom_val_y, curr_buf, C_SKY, 3);
+    draw_smooth_string(c_lbl_x, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "CURRENT", C_TEXT_MUTED);
+    draw_smooth_string(c_val_x, bottom_val_y, val_w, val_h, val_r, val_gap, curr_buf, C_SKY);
 
     // Push full frame to AMOLED
     rm67162_push_frame(s_fb);
     if (s_ui_mutex) xSemaphoreGive(s_ui_mutex);
 }
+
