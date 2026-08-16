@@ -7,6 +7,23 @@ A high-performance **Matter (CHIP) Controller & Energy Monitor Dashboard** built
 
 ---
 
+## 📱 AMOLED Display Layout
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│  ● TAPO P116M                                            [ ON ]  │
+│                                                                  │
+│                                                                  │
+│                            34 W                                  │
+│                                                                  │
+│                                                                  │
+│   VOLTAGE                                              CURRENT   │
+│    243V                                                 0.22A    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 📦 Pre-Built Binaries (Quick Flash)
 
 Pre-built binaries and **all-in-one merged flash images (`tapo-matter-display-merged.bin`)** are automatically built for every release via GitHub Actions.
@@ -18,7 +35,7 @@ You can flash a release in a single command without compiling:
 esptool.py --chip esp32s3 -p COM3 -b 460800 write_flash 0x0 tapo-matter-display-merged.bin
 ```
 
-Download the latest binary from the **[Releases](https://github.com/YOUR_USERNAME/tapo-matter-display/releases)** page.
+Download the latest binary from the **[Releases](https://github.com/chethanmb96/esp32s3amoled-tapoplug-matter/releases)** page.
 
 ---
 
@@ -81,8 +98,8 @@ source ./export.sh
 ### 2. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/tapo-matter-display.git
-cd tapo-matter-display
+git clone https://github.com/chethanmb96/esp32s3amoled-tapoplug-matter.git
+cd esp32s3amoled-tapoplug-matter
 ```
 
 ### 3. Configure Credentials
