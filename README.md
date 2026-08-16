@@ -2,12 +2,8 @@
 
 A high-performance **Matter (CHIP) Controller & Energy Monitor Dashboard** built for the **LILYGO T-Display-S3 AMOLED** (ESP32-S3) to display real-time telemetry from the **TP-Link Tapo P116M Smart Plug**.
 
-[![Build & CI](https://github.com/chethanmb96/esp32s3amoled-tapoplug-matter
-/actions/workflows/ci.yml/badge.svg)](https://github.com/chethanmb96/esp32s3amoled-tapoplug-matter
-/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/chethanmb96/esp32s3amoled-tapoplug-matter
-?color=blue)](https://github.com/chethanmb96/esp32s3amoled-tapoplug-matter
-/releases)
+[![Build & CI](https://github.com/chethanmb96/esp32s3amoled-tapoplug-matter/actions/workflows/ci.yml/badge.svg)](https://github.com/chethanmb96/esp32s3amoled-tapoplug-matter/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/chethanmb96/esp32s3amoled-tapoplug-matter?color=blue)](https://github.com/chethanmb96/esp32s3amoled-tapoplug-matter/releases)
 
 ---
 
