@@ -23,10 +23,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Download managed components
+        run: |
+          . /opt/esp/entrypoint.sh
+          idf.py --no-ccache reconfigure
+
+      - name: Patch esp-matter PeerAddress namespace ambiguity
+        run: |
+          PAIRING_CPP="managed_components/espressif__esp_matter/components/esp_matter_controller/commands/esp_matter_controller_pairing_command.cpp"
+          if [ -f "$PAIRING_CPP" ]; then
+            sed -i \
+              's/^\(\s*\)PeerAddress peerAddress = PeerAddress::UDP/\1chip::Transport::PeerAddress peerAddress = chip::Transport::PeerAddress::UDP/' \
+              "$PAIRING_CPP"
+            echo "Patch applied."
+          fi
+
       - name: Build Firmware
         run: |
           . /opt/esp/entrypoint.sh
-          idf.py build
+          ninja -C build
 
       - name: Generate Merged Flash Binary
         run: |

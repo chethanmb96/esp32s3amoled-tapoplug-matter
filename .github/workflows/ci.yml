@@ -17,17 +17,36 @@ jobs:
     name: Build Firmware (ESP-IDF v5.5.4)
     runs-on: ubuntu-latest
     # Pin to exact IDF patch version that matches local dev environment.
-    # esp-matter has namespace issues (PeerAddress) with older v5.5.x patch releases.
     container: espressif/idf:v5.5.4
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install managed components
+      - name: Download managed components
         run: |
           . /opt/esp/entrypoint.sh
           idf.py --no-ccache reconfigure
+
+      # esp-matter v1.6.0 has an unqualified PeerAddress reference in
+      # esp_matter_controller_pairing_command.cpp that is ambiguous between
+      # chip::Transport::PeerAddress and chip::Protocols::UserDirectedCommissioning::PeerAddress.
+      # Locally it's masked by cached .obj files; in a clean CI build it fails.
+      # Fix: fully qualify every bare PeerAddress occurrence in that file.
+      - name: Patch esp-matter PeerAddress namespace ambiguity
+        run: |
+          PAIRING_CPP="managed_components/espressif__esp_matter/components/esp_matter_controller/commands/esp_matter_controller_pairing_command.cpp"
+          if [ -f "$PAIRING_CPP" ]; then
+            echo "Patching $PAIRING_CPP for PeerAddress namespace ambiguity..."
+            # Qualify the bare PeerAddress type on line ~129
+            sed -i \
+              's/^\(\s*\)PeerAddress peerAddress = PeerAddress::UDP/\1chip::Transport::PeerAddress peerAddress = chip::Transport::PeerAddress::UDP/' \
+              "$PAIRING_CPP"
+            echo "Patch applied."
+            grep -n "PeerAddress" "$PAIRING_CPP" | head -10
+          else
+            echo "WARNING: pairing_command.cpp not found — skipping patch."
+          fi
 
       - name: Build Project
         run: |
