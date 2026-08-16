@@ -9,6 +9,10 @@ A high-performance **Matter (CHIP) Controller & Energy Monitor Dashboard** built
 
 ## 📱 AMOLED Display Layout
 
+<p align="center">
+  <img src="docs/images/amoled_ui.jpg" alt="Tapo P116M Matter AMOLED Display UI" width="720" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,230,255,0.15);" />
+</p>
+
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
 │  ● TAPO P116M                                            [ ON ]  │
