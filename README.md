@@ -13,18 +13,6 @@ A high-performance **Matter (CHIP) Controller & Energy Monitor Dashboard** built
   <img src="docs/images/amoled_ui.jpg" alt="Tapo P116M Matter AMOLED Display UI" width="720" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,230,255,0.15);" />
 </p>
 
-```text
-┌──────────────────────────────────────────────────────────────────┐
-│  ● TAPO P116M                                            [ ON ]  │
-│                                                                  │
-│                                                                  │
-│                            34 W                                  │
-│                                                                  │
-│                                                                  │
-│   VOLTAGE                                              CURRENT   │
-│    243V                                                 0.22A    │
-└──────────────────────────────────────────────────────────────────┘
-```
 
 ---
 
