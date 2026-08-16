@@ -6,21 +6,33 @@ on:
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual run (optional)"
+        required: false
+        default: "Manual trigger"
 
 jobs:
   build:
-    name: Build Firmware (ESP-IDF v5.5)
+    name: Build Firmware (ESP-IDF v5.5.4)
     runs-on: ubuntu-latest
-    container: espressif/idf:v5.5
+    # Pin to exact IDF patch version that matches local dev environment.
+    # esp-matter has namespace issues (PeerAddress) with older v5.5.x patch releases.
+    container: espressif/idf:v5.5.4
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install managed components
+        run: |
+          . /opt/esp/entrypoint.sh
+          idf.py --no-ccache reconfigure
+
       - name: Build Project
         run: |
           . /opt/esp/entrypoint.sh
-          idf.py build
+          ninja -C build
 
       - name: Generate Merged Flash Binary
         run: |

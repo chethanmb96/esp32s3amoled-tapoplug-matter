@@ -15,7 +15,7 @@ jobs:
   release:
     name: Build & Publish GitHub Release
     runs-on: ubuntu-latest
-    container: espressif/idf:v5.5
+    container: espressif/idf:v5.5.4
     permissions:
       contents: write
 
