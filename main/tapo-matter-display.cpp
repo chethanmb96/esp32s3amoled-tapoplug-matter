@@ -194,15 +194,10 @@ static ui_state_t g_ui_state = {
     .power_w = 0.0f,
     .voltage_v = 230.0f,
     .current_a = 0.0f,
-    .energy_wh = 0.0f,
-    .runtime_hours = 0.0f,
     .is_on = false,
     .is_connected = false,
     .status_msg = "CONNECTING..."
 };
-
-static float s_accumulated_energy_wh = 0.0f;
-static float s_runtime_hours = 0.0f;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Attribute report callback — updates live UI telemetry state
@@ -275,20 +270,7 @@ static void attr_report_cb(uint64_t node_id,
         goto done;
     }
 
-    // 3. Cluster 0x0091: Electrical Energy Measurement (Matter 1.3+) / 0x0702 Simple Metering
-    if (path.mEndpointId == 1 && (path.mClusterId == 0x0091 || path.mClusterId == 0x0702)) {
-        if (tlv_get_int64(data, raw_val) && raw_val > 0) {
-            // raw_val in mWh -> Wh, or Wh directly
-            float reported_wh = (raw_val > 1000000) ? ((float)raw_val / 1000.0f) : (float)raw_val;
-            if (reported_wh > s_accumulated_energy_wh) {
-                s_accumulated_energy_wh = reported_wh;
-                g_ui_state.energy_wh = s_accumulated_energy_wh;
-            }
-        }
-        goto done;
-    }
-
-    // 4. Cluster 0x0B04: Electrical Measurement (legacy ZCL)
+    // 3. Cluster 0x0B04: Electrical Measurement (legacy ZCL)
     if (path.mEndpointId == 1 && path.mClusterId == 0x0B04) {
         if (!tlv_get_int64(data, raw_val)) goto done;
         switch (path.mAttributeId) {
@@ -443,23 +425,9 @@ static void telemetry_task(void *pvParam)
     // Give Matter DNS-SD discovery a moment to resolve the node
     vTaskDelay(pdMS_TO_TICKS(3000));
 
-    uint64_t last_energy_calc_time_us = esp_timer_get_time();
     uint32_t retry_backoff_ms = 5000;
 
     while (1) {
-        // Integrate continuous energy consumption (Wh) and runtime (hours)
-        uint64_t now_us = esp_timer_get_time();
-        float dt_hours = (float)(now_us - last_energy_calc_time_us) / 3600000000.0f;
-        last_energy_calc_time_us = now_us;
-
-        if (g_ui_state.is_on) {
-            s_runtime_hours += dt_hours;
-            if (g_ui_state.power_w > 0.0f) {
-                s_accumulated_energy_wh += g_ui_state.power_w * dt_hours;
-            }
-        }
-        g_ui_state.energy_wh = s_accumulated_energy_wh;
-        g_ui_state.runtime_hours = s_runtime_hours;
 
         if (!s_subscription_active && !s_subscription_pending) {
             ESP_LOGI(TAG, "Attempting subscription to P116M (backoff %lu ms)...", (unsigned long)retry_backoff_ms);

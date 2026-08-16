@@ -586,44 +586,30 @@ void display_ui_update(const ui_state_t *state)
     float unit_y = hero_y + char_h - unit_h;
     draw_smooth_string(hero_x + num_total_w + 14.0f, unit_y, unit_w, unit_h, unit_stroke_r, unit_gap, unit_buf, C_CYAN);
 
-    // 3. BOTTOM METRICS: 4 Columns (Voltage | Current | Today (Wh) | Runtime)
-    // All rendered with smooth anti-aliased vector typography without space between value & unit
-    float bottom_lbl_y = 162.0f;
-    float bottom_val_y = 184.0f;
-    float lbl_w = 8.0f, lbl_h = 13.0f, lbl_r = 1.2f, lbl_gap = 2.0f;
-    float val_w = 15.0f, val_h = 26.0f, val_r = 2.1f, val_gap = 3.0f;
+    // 3. BOTTOM METRICS: 2 Columns (Voltage on Left | Current on Right)
+    // Rendered with large, smooth anti-aliased vector typography
+    float bottom_lbl_y = 156.0f;
+    float bottom_val_y = 182.0f;
+    float lbl_w = 11.0f, lbl_h = 17.0f, lbl_r = 1.5f, lbl_gap = 3.0f;
+    float val_w = 21.0f, val_h = 36.0f, val_r = 2.8f, val_gap = 4.5f;
 
-    // Metric 1: Voltage (Left) — e.g. "238V"
-    float col0_x = 20.0f;
-    draw_smooth_string(col0_x, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "VOLTAGE", C_TEXT_MUTED);
+    // Metric 1: Voltage (Left aligned at x=40)
+    draw_smooth_string(40.0f, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "VOLTAGE", C_TEXT_MUTED);
 
     char volt_buf[32];
     snprintf(volt_buf, sizeof(volt_buf), "%dV", (int)roundf(state->voltage_v));
-    draw_smooth_string(col0_x, bottom_val_y, val_w, val_h, val_r, val_gap, volt_buf, C_AMBER);
+    draw_smooth_string(40.0f, bottom_val_y, val_w, val_h, val_r, val_gap, volt_buf, C_AMBER);
 
-    // Metric 2: Current — e.g. "0.45A"
-    float col1_x = 150.0f;
-    draw_smooth_string(col1_x, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "CURRENT", C_TEXT_MUTED);
-
+    // Metric 2: Current (Right aligned at x=LCD_WIDTH - width - 40)
     char curr_buf[32];
     snprintf(curr_buf, sizeof(curr_buf), "%.2fA", state->current_a);
-    draw_smooth_string(col1_x, bottom_val_y, val_w, val_h, val_r, val_gap, curr_buf, C_SKY);
+    float c_val_w = smooth_string_width(val_w, val_gap, curr_buf);
+    float c_lbl_w = smooth_string_width(lbl_w, lbl_gap, "CURRENT");
+    float c_val_x = (float)LCD_WIDTH - c_val_w - 40.0f;
+    float c_lbl_x = (float)LCD_WIDTH - c_lbl_w - 40.0f;
 
-    // Metric 3: Today's Consumption in Wh (No decimals) — e.g. "15Wh"
-    float col2_x = 280.0f;
-    draw_smooth_string(col2_x, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "TODAY", C_TEXT_MUTED);
-
-    char energy_buf[32];
-    snprintf(energy_buf, sizeof(energy_buf), "%dWh", (int)roundf(state->energy_wh));
-    draw_smooth_string(col2_x, bottom_val_y, val_w, val_h, val_r, val_gap, energy_buf, C_EMERALD);
-
-    // Metric 4: Runtime — e.g. "4.1H"
-    float col3_x = 415.0f;
-    draw_smooth_string(col3_x, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "RUNTIME", C_TEXT_MUTED);
-
-    char runtime_buf[32];
-    snprintf(runtime_buf, sizeof(runtime_buf), "%.1fH", state->runtime_hours);
-    draw_smooth_string(col3_x, bottom_val_y, val_w, val_h, val_r, val_gap, runtime_buf, rgb565(255, 185, 40));
+    draw_smooth_string(c_lbl_x, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "CURRENT", C_TEXT_MUTED);
+    draw_smooth_string(c_val_x, bottom_val_y, val_w, val_h, val_r, val_gap, curr_buf, C_SKY);
 
     // Push full frame to AMOLED
     rm67162_push_frame(s_fb);
