@@ -7,7 +7,7 @@ font_path = "/mnt/c/Windows/Fonts/arialbd.ttf"
 if not os.path.exists(font_path):
     font_path = "/mnt/c/Windows/Fonts/segoeuib.ttf"
 
-def render_font_set(font_size, char_list, glow_radius=6.0, glow_intensity=1.8):
+def render_font_set(font_size, char_list, glow_radius=4.0, glow_intensity=1.1):
     font = ImageFont.truetype(font_path, font_size)
     ascent, descent = font.getmetrics()
     baseline = ascent
@@ -25,7 +25,7 @@ def render_font_set(font_size, char_list, glow_radius=6.0, glow_intensity=1.8):
             continue
             
         adv = int(font.getlength(c))
-        pad = int(glow_radius * 2.8) + 4
+        pad = int(glow_radius * 2.2) + 3
         
         img_w = max(adv, int(font_size * 0.8)) + pad * 2
         img_h = (ascent + descent) + pad * 2
@@ -35,16 +35,14 @@ def render_font_set(font_size, char_list, glow_radius=6.0, glow_intensity=1.8):
         draw = ImageDraw.Draw(img)
         draw.text((pad, pad), c, font=font, fill=255)
         
-        # Multi-pass Gaussian blur glow
-        glow1 = img.filter(ImageFilter.GaussianBlur(radius=glow_radius * 0.5))
+        # Crisp, tight Gaussian blur glow (clean edge halo)
+        glow1 = img.filter(ImageFilter.GaussianBlur(radius=glow_radius * 0.6))
         glow2 = img.filter(ImageFilter.GaussianBlur(radius=glow_radius))
-        glow3 = img.filter(ImageFilter.GaussianBlur(radius=glow_radius * 1.5))
         
         # Composite glow
         glow_data = []
         g1 = list(glow1.getdata())
         g2 = list(glow2.getdata())
-        g3 = list(glow3.getdata())
         c_data = list(img.getdata())
         
         min_x, min_y, max_x, max_y = img_w, img_h, 0, 0
@@ -52,12 +50,11 @@ def render_font_set(font_size, char_list, glow_radius=6.0, glow_intensity=1.8):
         for y in range(img_h):
             for x in range(img_w):
                 idx = y * img_w + x
-                # Combine multi-tier bloom
-                val = int((g1[idx] * 0.45 + g2[idx] * 0.40 + g3[idx] * 0.35) * glow_intensity)
+                val = int((g1[idx] * 0.55 + g2[idx] * 0.45) * glow_intensity)
                 if val > 255: val = 255
                 glow_data.append(val)
                 
-                if val > 4 or c_data[idx] > 0:
+                if val > 3 or c_data[idx] > 0:
                     if x < min_x: min_x = x
                     if x > max_x: max_x = x
                     if y < min_y: min_y = y
@@ -69,7 +66,6 @@ def render_font_set(font_size, char_list, glow_radius=6.0, glow_intensity=1.8):
         crop_w = max_x - min_x + 1
         crop_h = max_y - min_y + 1
         
-        # Extract cropped core & glow arrays
         core_crop = []
         glow_crop = []
         for y in range(min_y, max_y + 1):
@@ -93,11 +89,11 @@ def render_font_set(font_size, char_list, glow_radius=6.0, glow_intensity=1.8):
     return glyphs
 
 def export_c_header(filename):
-    print("Rasterizing fonts with broad Gaussian bloom halo...")
-    hero_glyphs = render_font_set(122, "0123456789.-", glow_radius=7.5, glow_intensity=2.0)
-    unit_glyphs = render_font_set(54, "wkWMVA", glow_radius=4.8, glow_intensity=2.0)
-    metric_glyphs = render_font_set(40, "0123456789.VAWk", glow_radius=3.8, glow_intensity=1.8)
-    label_glyphs = render_font_set(18, "TAPOP16MVOLTAGE CURRENT ON OFF", glow_radius=2.2, glow_intensity=1.6)
+    print("Rasterizing fonts with subtle crisp glow halo...")
+    hero_glyphs = render_font_set(122, "0123456789.-", glow_radius=4.8, glow_intensity=1.15)
+    unit_glyphs = render_font_set(54, "wkWMVA", glow_radius=3.2, glow_intensity=1.1)
+    metric_glyphs = render_font_set(40, "0123456789.VAWk", glow_radius=2.6, glow_intensity=1.0)
+    label_glyphs = render_font_set(18, "TAPOP16MVOLTAGE CURRENT ON OFF", glow_radius=1.6, glow_intensity=0.8)
     
     print(f"Writing {filename}...")
     with open(filename, "w") as f:
