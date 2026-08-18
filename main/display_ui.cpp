@@ -159,383 +159,73 @@ static void draw_rounded_rect(int x, int y, int w, int h, int r, uint16_t bg, ui
     }
 }
 
-// ── Smooth Anti-Aliased Vector Typography Engine with Edge Bloom Halo ─────────
-static void draw_smooth_segment(float x1, float y1, float x2, float y2, float r, uint16_t color)
+// ── Real Arial TrueType Font Rendering Engine with Precomputed Edge Glow ─────
+#include "arial_font.h"
+
+static const arial_glyph_t *find_arial_glyph(const arial_glyph_t *font, char c)
 {
-    float dx = x2 - x1, dy = y2 - y1;
-    float len2 = dx * dx + dy * dy;
-    float max_reach = r + 5.5f; // Multi-layer soft luminous bloom halo
-    int min_x = (int)floorf(fminf(x1, x2) - max_reach);
-    int max_x = (int)ceilf(fmaxf(x1, x2) + max_reach);
-    int min_y = (int)floorf(fminf(y1, y2) - max_reach);
-    int max_y = (int)ceilf(fmaxf(y1, y2) + max_reach);
+    for (int i = 0; font[i].c != 0; i++) {
+        if (font[i].c == c) return &font[i];
+    }
+    return NULL;
+}
 
-    if (min_x < 0) min_x = 0;
-    if (min_y < 0) min_y = 0;
-    if (max_x >= LCD_WIDTH) max_x = LCD_WIDTH - 1;
-    if (max_y >= LCD_HEIGHT) max_y = LCD_HEIGHT - 1;
+static void draw_arial_glyph(int x, int y, const arial_glyph_t *g, uint16_t color, uint16_t glow_color)
+{
+    if (!g || g->w == 0 || g->h == 0) return;
+    int gx = x + g->off_x;
+    int gy = y + g->off_y;
 
-    for (int y = min_y; y <= max_y; y++) {
-        for (int x = min_x; x <= max_x; x++) {
-            float px = (float)x - x1;
-            float py = (float)y - y1;
-            float t = (len2 > 0.0001f) ? (px * dx + py * dy) / len2 : 0.0f;
-            if (t < 0.0f) t = 0.0f;
-            else if (t > 1.0f) t = 1.0f;
+    for (int dy = 0; dy < g->h; dy++) {
+        int py = gy + dy;
+        if (py < 0 || py >= LCD_HEIGHT) continue;
+        for (int dx = 0; dx < g->w; dx++) {
+            int px = gx + dx;
+            if (px < 0 || px >= LCD_WIDTH) continue;
+            int idx = dy * g->w + dx;
 
-            float qx = x1 + t * dx;
-            float qy = y1 + t * dy;
-            float dist = sqrtf(((float)x - qx) * ((float)x - qx) + ((float)y - qy) * ((float)y - qy));
+            uint8_t glow_a = g->glow_data ? g->glow_data[idx] : 0;
+            uint8_t core_a = g->core_data ? g->core_data[idx] : 0;
 
-            if (dist <= r - 0.5f) {
-                draw_pixel(x, y, color);
-            } else if (dist <= r + 0.6f) {
-                // Core anti-aliasing
-                uint8_t a = (uint8_t)((r + 0.6f - dist) * 255.0f);
-                blend_pixel(x, y, color, a);
-            } else if (dist <= r + 2.4f) {
-                // Inner bright luminous glow
-                float f = (r + 2.4f - dist) / 1.8f;
-                uint8_t glow_a = (uint8_t)(f * f * 115.0f);
-                if (glow_a > 0) blend_pixel_glow(x, y, color, glow_a);
-            } else if (dist <= r + 5.5f) {
-                // Outer diffused bloom halo
-                float f = (r + 5.5f - dist) / 3.1f;
-                uint8_t glow_a = (uint8_t)(f * f * 48.0f);
-                if (glow_a > 0) blend_pixel_glow(x, y, color, glow_a);
+            if (glow_a > 0 && glow_color != 0) {
+                blend_pixel_glow(px, py, glow_color, glow_a);
+            }
+            if (core_a > 0) {
+                blend_pixel(px, py, color, core_a);
             }
         }
     }
 }
 
-static void draw_smooth_char(float x, float y, float w, float h, float r, char c, uint16_t color)
+static int draw_arial_string(int x, int y, const arial_glyph_t *font, const char *str, uint16_t color, uint16_t glow_color)
 {
-    float x1 = x + r, x2 = x + w - r;
-    float y1 = y + r, y2 = y + h - r;
-    float xm = x + w * 0.5f;
-    float ym = y + h * 0.5f;
-    float rc_w = w * 0.22f;
-    float rc_h = h * 0.16f;
-
-    switch (c) {
-    case '0':
-        // Arial-style smooth rounded rectangle / stadium
-        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
-        draw_smooth_segment(x1, y2 - rc_h, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
-        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
-        break;
-    case '1':
-        // Arial '1' with sharp angled top-left flag
-        draw_smooth_segment(xm, y1, xm, y2, r, color);
-        draw_smooth_segment(x + w * 0.18f, y + h * 0.24f, xm, y1, r, color);
-        break;
-    case '2':
-        // Arial '2': smooth round top arch, diagonal sweep down to bottom left, flat base
-        draw_smooth_segment(x1, y1 + rc_h, x1 + rc_w, y1, r, color);
-        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x2, y1 + h * 0.34f, r, color);
-        draw_smooth_segment(x2, y1 + h * 0.34f, x1, y2, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
-        break;
-    case '3':
-        // Arial '3': flat top bar, angled diagonal to center, rounded lower bowl with upturn
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, xm + w * 0.08f, ym, r, color);
-        draw_smooth_segment(xm + w * 0.08f, ym, x2, ym + h * 0.08f, r, color);
-        draw_smooth_segment(x2, ym + h * 0.08f, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
-        draw_smooth_segment(x1 + rc_w, y2, x1, y2 - rc_h, r, color);
-        break;
-    case '4':
-        // Arial '4': vertical stem on right, sharp diagonal left arm, horizontal crossbar
-        draw_smooth_segment(x + w * 0.74f, y1, x + w * 0.74f, y2, r, color);
-        draw_smooth_segment(x + w * 0.74f, y1, x1, ym + h * 0.12f, r, color);
-        draw_smooth_segment(x1, ym + h * 0.12f, x2, ym + h * 0.12f, r, color);
-        break;
-    case '5':
-        // Arial '5': top horizontal bar, vertical drop, rounded lower bowl
-        draw_smooth_segment(x2, y1, x1, y1, r, color);
-        draw_smooth_segment(x1, y1, x1, ym - h * 0.04f, r, color);
-        draw_smooth_segment(x1, ym - h * 0.04f, x2 - rc_w, ym - h * 0.04f, r, color);
-        draw_smooth_segment(x2 - rc_w, ym - h * 0.04f, x2, ym + rc_h, r, color);
-        draw_smooth_segment(x2, ym + rc_h, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x1, y2, r, color);
-        break;
-    case '6':
-        // Arial '6': smooth top-left curve down to full circular lower bowl
-        draw_smooth_segment(x2 - rc_w, y1, x1 + rc_w, y1, r, color);
-        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(x1, y1 + rc_h, x1, y2 - rc_h, r, color);
-        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
-        draw_smooth_segment(x1 + rc_w, y2, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x2, y2 - rc_h, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, x1, ym, r, color);
-        break;
-    case '7':
-        // Arial '7': flat top bar, angled diagonal to bottom left
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x1 + w * 0.2f, y2, r, color);
-        break;
-    case '8':
-        // Arial '8': upper and lower rounded loops
-        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x1 + rc_w, ym, x2 - rc_w, ym, r, color);
-        draw_smooth_segment(x1 + rc_w, y2, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x1, y1 + rc_h, x1, ym - rc_h, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x2, ym - rc_h, r, color);
-        draw_smooth_segment(x1, ym + rc_h, x1, y2 - rc_h, r, color);
-        draw_smooth_segment(x2, ym + rc_h, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
-        draw_smooth_segment(x1, ym - rc_h, x1 + rc_w, ym, r, color);
-        draw_smooth_segment(x2, ym - rc_h, x2 - rc_w, ym, r, color);
-        draw_smooth_segment(x1 + rc_w, ym, x1, ym + rc_h, r, color);
-        draw_smooth_segment(x2 - rc_w, ym, x2, ym + rc_h, r, color);
-        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
-        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
-        break;
-    case '9':
-        // Arial '9': upper full circular bowl curving down to bottom-left hook
-        draw_smooth_segment(x1 + rc_w, ym, x2, ym, r, color);
-        draw_smooth_segment(x1, ym - rc_h, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(x1, y1 + rc_h, x1 + rc_w, y1, r, color);
-        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
-        break;
-    case 'A':
-        draw_smooth_segment(x1, y2, xm, y1, r, color);
-        draw_smooth_segment(xm, y1, x2, y2, r, color);
-        draw_smooth_segment(x + w * 0.22f, ym + h * 0.12f, x + w * 0.78f, ym + h * 0.12f, r, color);
-        break;
-    case 'B':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x1, ym, r, color);
-        draw_smooth_segment(x1, ym, x2, ym + rc_h, r, color);
-        draw_smooth_segment(x2, ym + rc_h, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x1, y2, r, color);
-        break;
-    case 'C':
-        draw_smooth_segment(x2, y1, x1 + rc_w, y1, r, color);
-        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(x1, y1 + rc_h, x1, y2 - rc_h, r, color);
-        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
-        draw_smooth_segment(x1 + rc_w, y2, x2, y2, r, color);
-        break;
-    case 'D':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x2 - rc_w, y1, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x1, y2, r, color);
-        break;
-    case 'E':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x1, ym, x2 - w * 0.18f, ym, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
-        break;
-    case 'F':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x1, ym, x2 - w * 0.18f, ym, r, color);
-        break;
-    case 'G':
-        draw_smooth_segment(x2, y1, x1 + rc_w, y1, r, color);
-        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(x1, y1 + rc_h, x1, y2 - rc_h, r, color);
-        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
-        draw_smooth_segment(x1 + rc_w, y2, x2, y2, r, color);
-        draw_smooth_segment(x2, y2, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, xm, ym, r, color);
-        break;
-    case 'H':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x2, y1, x2, y2, r, color);
-        draw_smooth_segment(x1, ym, x2, ym, r, color);
-        break;
-    case 'I':
-        draw_smooth_segment(xm, y1, xm, y2, r, color);
-        break;
-    case 'J':
-        draw_smooth_segment(x2, y1, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x1, y2 - rc_h, r, color);
-        break;
-    case 'K':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x2, y1, x1, ym, r, color);
-        draw_smooth_segment(x1 + w * 0.15f, ym, x2, y2, r, color);
-        break;
-    case 'L':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
-        break;
-    case 'M':
-        draw_smooth_segment(x1, y2, x1, y1, r, color);
-        draw_smooth_segment(x1, y1, xm, ym + h * 0.15f, r, color);
-        draw_smooth_segment(xm, ym + h * 0.15f, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x2, y2, r, color);
-        break;
-    case 'N':
-        draw_smooth_segment(x1, y2, x1, y1, r, color);
-        draw_smooth_segment(x1, y1, x2, y2, r, color);
-        draw_smooth_segment(x2, y2, x2, y1, r, color);
-        break;
-    case 'O':
-        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
-        draw_smooth_segment(x1, y2 - rc_h, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
-        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
-        break;
-    case 'P':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x2, ym - rc_h, r, color);
-        draw_smooth_segment(x2, ym - rc_h, x2 - rc_w, ym, r, color);
-        draw_smooth_segment(x2 - rc_w, ym, x1, ym, r, color);
-        break;
-    case 'Q':
-        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
-        draw_smooth_segment(x1, y2 - rc_h, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(xm, ym + h * 0.15f, x2 + w * 0.1f, y2 + h * 0.1f, r, color);
-        break;
-    case 'R':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x2, ym - rc_h, r, color);
-        draw_smooth_segment(x2, ym - rc_h, x2 - rc_w, ym, r, color);
-        draw_smooth_segment(x2 - rc_w, ym, x1, ym, r, color);
-        draw_smooth_segment(x1 + w * 0.25f, ym, x2, y2, r, color);
-        break;
-    case 'S':
-        draw_smooth_segment(x2, y1, x1 + rc_w, y1, r, color);
-        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
-        draw_smooth_segment(x1, y1 + rc_h, x2, ym + rc_h, r, color);
-        draw_smooth_segment(x2, ym + rc_h, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x1, y2, r, color);
-        break;
-    case 'T':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(xm, y1, xm, y2, r, color);
-        break;
-    case 'U':
-        draw_smooth_segment(x1, y1, x1, y2 - rc_h, r, color);
-        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
-        draw_smooth_segment(x1 + rc_w, y2, x2 - rc_w, y2, r, color);
-        draw_smooth_segment(x2 - rc_w, y2, x2, y2 - rc_h, r, color);
-        draw_smooth_segment(x2, y2 - rc_h, x2, y1, r, color);
-        break;
-    case 'V':
-        draw_smooth_segment(x1, y1, xm, y2, r, color);
-        draw_smooth_segment(xm, y2, x2, y1, r, color);
-        break;
-    case 'W':
-    case 'w':
-        // Modern geometric lowercase w (or W)
-        draw_smooth_segment(x1, y1, x + w * 0.28f, y2, r, color);
-        draw_smooth_segment(x + w * 0.28f, y2, xm, y1 + h * 0.35f, r, color);
-        draw_smooth_segment(xm, y1 + h * 0.35f, x + w * 0.72f, y2, r, color);
-        draw_smooth_segment(x + w * 0.72f, y2, x2, y1, r, color);
-        break;
-    case 'X':
-        draw_smooth_segment(x1, y1, x2, y2, r, color);
-        draw_smooth_segment(x2, y1, x1, y2, r, color);
-        break;
-    case 'Y':
-        draw_smooth_segment(x1, y1, xm, ym, r, color);
-        draw_smooth_segment(x2, y1, xm, ym, r, color);
-        draw_smooth_segment(xm, ym, xm, y2, r, color);
-        break;
-    case 'Z':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
-        break;
-    case 'k':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x2, y + h * 0.32f, x1, ym + h * 0.08f, r, color);
-        draw_smooth_segment(x1, ym + h * 0.08f, x2, y2, r, color);
-        break;
-    case 'h':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, ym, x2 - rc_w, ym, r, color);
-        draw_smooth_segment(x2 - rc_w, ym, x2, ym + rc_h, r, color);
-        draw_smooth_segment(x2, ym + rc_h, x2, y2, r, color);
-        break;
-    case '.':
-        draw_smooth_segment(xm, y2 - r * 0.6f, xm, y2 - r * 0.6f, r * 1.3f, color);
-        break;
-    case ':':
-        draw_smooth_segment(xm, ym - h * 0.25f, xm, ym - h * 0.25f, r * 1.2f, color);
-        draw_smooth_segment(xm, ym + h * 0.25f, xm, ym + h * 0.25f, r * 1.2f, color);
-        break;
-    case '-':
-        draw_smooth_segment(x1, ym, x2, ym, r, color);
-        break;
-    default:
-        break;
-    }
-}
-
-static void draw_smooth_string(float x, float y, float char_w, float char_h, float stroke_r, float gap, const char *str, uint16_t color)
-{
-    float cur_x = x;
+    int cur_x = x;
     while (*str) {
-        float w = char_w;
-        if (*str == '.' || *str == ':' || *str == ' ') {
-            w = char_w * 0.35f;
-        } else if (*str == '1' || *str == 'I') {
-            w = char_w * 0.6f;
-        } else if (*str == 'W' || *str == 'M') {
-            w = char_w * 1.2f;
+        const arial_glyph_t *g = find_arial_glyph(font, *str);
+        if (g) {
+            draw_arial_glyph(cur_x, y, g, color, glow_color);
+            cur_x += g->adv_x;
+        } else {
+            cur_x += 10;
         }
-        if (*str != ' ') {
-            draw_smooth_char(cur_x, y, w, char_h, stroke_r, *str, color);
-        }
-        cur_x += w + gap;
         str++;
     }
+    return cur_x - x;
 }
 
-static float smooth_string_width(float char_w, float gap, const char *str)
+static int arial_string_width(const arial_glyph_t *font, const char *str)
 {
-    float total = 0;
+    int w = 0;
     while (*str) {
-        float w = char_w;
-        if (*str == '.' || *str == ':' || *str == ' ') {
-            w = char_w * 0.35f;
-        } else if (*str == '1' || *str == 'I') {
-            w = char_w * 0.6f;
-        } else if (*str == 'W' || *str == 'M') {
-            w = char_w * 1.2f;
+        const arial_glyph_t *g = find_arial_glyph(font, *str);
+        if (g) {
+            w += g->adv_x;
+        } else {
+            w += 10;
         }
-        total += w + gap;
         str++;
     }
-    return (total > 0) ? total - gap : 0;
+    return w;
 }
 
 // ── Built-in 8x16 Basic Font Table ───────────────────────────────────────────
@@ -602,23 +292,23 @@ void display_ui_show_splash(const char *status_text, const char *subtext)
 
     memset(s_fb, 0, LCD_WIDTH * LCD_HEIGHT * sizeof(uint16_t));
 
-    // Logo / Title
+    // Logo / Title in Arial
     const char *title = "TAPO P116M";
-    float tw = smooth_string_width(20.0f, 4.0f, title);
-    draw_smooth_string((LCD_WIDTH - tw) / 2.0f, 45.0f, 20.0f, 32.0f, 2.4f, 4.0f, title, C_CYAN);
+    int tw = arial_string_width(font_arial_metric, title);
+    draw_arial_string((LCD_WIDTH - tw) / 2, 70, font_arial_metric, title, C_CYAN, C_CYAN);
 
     // Accent line
-    fill_rect(80, 95, LCD_WIDTH - 160, 2, C_CARD_BORDER);
+    fill_rect(80, 100, LCD_WIDTH - 160, 2, C_CARD_BORDER);
 
-    // Status box
+    // Status text in Arial
     if (status_text) {
-        float sw = smooth_string_width(14.0f, 3.0f, status_text);
-        draw_smooth_string((LCD_WIDTH - sw) / 2.0f, 120.0f, 14.0f, 22.0f, 1.8f, 3.0f, status_text, C_EMERALD);
+        int sw = arial_string_width(font_arial_label, status_text);
+        draw_arial_string((LCD_WIDTH - sw) / 2, 140, font_arial_label, status_text, C_EMERALD, C_EMERALD);
     }
 
     if (subtext) {
-        float subw = smooth_string_width(10.0f, 2.0f, subtext);
-        draw_smooth_string((LCD_WIDTH - subw) / 2.0f, 165.0f, 10.0f, 16.0f, 1.3f, 2.0f, subtext, C_TEXT_MUTED);
+        int subw = arial_string_width(font_arial_label, subtext);
+        draw_arial_string((LCD_WIDTH - subw) / 2, 180, font_arial_label, subtext, C_TEXT_MUTED, 0);
     }
 
     rm67162_push_frame(s_fb);
@@ -642,8 +332,8 @@ void display_ui_update(const ui_state_t *state)
         fill_circle(dotX, dotY, 4, C_RED);
     }
     
-    // Top Title: TAPO P116M (Smooth Font in Muted Silver-Gray)
-    draw_smooth_string(38.0f, 13.0f, 11.0f, 18.0f, 1.5f, 2.5f, "TAPO P116M", C_MUTED_GRAY);
+    // Top Title: TAPO P116M (Real Arial Font in Muted Silver-Gray)
+    draw_arial_string(38, 27, font_arial_label, "TAPO P116M", C_MUTED_GRAY, 0);
 
     // Top Right: Compact Glowing ON / OFF Rounded Pill Badge
     int pW = 56, pH = 26, pR = 12;
@@ -651,80 +341,68 @@ void display_ui_update(const ui_state_t *state)
     if (state->is_on) {
         draw_rounded_rect(pX - 1, pY - 1, pW + 2, pH + 2, pR + 1, C_GLOW_EMERALD, C_GLOW_EMERALD);
         draw_rounded_rect(pX, pY, pW, pH, pR, C_EMERALD, C_EMERALD);
-        float on_w = smooth_string_width(12.0f, 3.0f, "ON");
-        draw_smooth_string(pX + (pW - on_w) / 2.0f, pY + 4.0f, 12.0f, 18.0f, 1.8f, 3.0f, "ON", C_BLACK);
+        int on_w = arial_string_width(font_arial_label, "ON");
+        draw_arial_string(pX + (pW - on_w) / 2, pY + 19, font_arial_label, "ON", C_BLACK, 0);
     } else {
         draw_rounded_rect(pX - 1, pY - 1, pW + 2, pH + 2, pR + 1, C_GLOW_RED, C_GLOW_RED);
         draw_rounded_rect(pX, pY, pW, pH, pR, C_RED, C_RED);
-        float off_w = smooth_string_width(12.0f, 3.0f, "OFF");
-        draw_smooth_string(pX + (pW - off_w) / 2.0f, pY + 4.0f, 12.0f, 18.0f, 1.8f, 3.0f, "OFF", C_WHITE);
+        int off_w = arial_string_width(font_arial_label, "OFF");
+        draw_arial_string(pX + (pW - off_w) / 2, pY + 19, font_arial_label, "OFF", C_WHITE, 0);
     }
 
-    // 2. HERO METRIC: Active Power (Smooth Anti-Aliased Vector Readout)
+    // 2. HERO METRIC: Active Power (Real Arial Bold Digits + Real Arial Cyan Unit)
     char power_buf[32];
-    char unit_buf[8] = "W";
+    char unit_buf[8] = "w";
     float p_val = state->power_w;
 
     if (p_val >= 1000.0f) {
         snprintf(power_buf, sizeof(power_buf), "%.1f", p_val / 1000.0f);
-        strcpy(unit_buf, "kW");
+        strcpy(unit_buf, "kw");
     } else {
         snprintf(power_buf, sizeof(power_buf), "%d", (int)roundf(p_val));
     }
 
-    // Smooth typography parameters for Power Readout
-    float char_w = 54.0f;
-    float char_h = 98.0f;
-    float stroke_r = 5.0f;
-    float gap = 10.0f;
+    int num_total_w = arial_string_width(font_arial_hero, power_buf);
+    int unit_total_w = arial_string_width(font_arial_unit, unit_buf);
+    int gap = 8;
+    int total_hero_w = num_total_w + gap + unit_total_w;
 
-    float unit_w = 28.0f;
-    float unit_h = 42.0f;
-    float unit_stroke_r = 3.0f;
-    float unit_gap = 6.0f;
+    int hero_x = (LCD_WIDTH - total_hero_w) / 2;
+    int hero_y = 136; // Baseline alignment for Arial 118pt
 
-    float num_total_w = smooth_string_width(char_w, gap, power_buf);
-    float unit_total_w = smooth_string_width(unit_w, unit_gap, unit_buf);
-    float total_hero_w = num_total_w + 14.0f + unit_total_w;
-
-    float hero_x = (LCD_WIDTH - total_hero_w) / 2.0f;
-    float hero_y = 48.0f;
-
-    // Render smooth anti-aliased power digits in Pure White
+    // Render Real Arial Bold power digits with luminous white halo glow
     uint16_t power_color = state->is_on ? C_WHITE : rgb565(120, 120, 130);
-    draw_smooth_string(hero_x, hero_y, char_w, char_h, stroke_r, gap, power_buf, power_color);
+    uint16_t power_glow  = state->is_on ? C_WHITE : rgb565(40, 40, 50);
+    draw_arial_string(hero_x, hero_y, font_arial_hero, power_buf, power_color, power_glow);
 
-    // Render smooth unit in Neon Cyan aligned directly to the baseline
-    float unit_y = hero_y + char_h - unit_h;
-    draw_smooth_string(hero_x + num_total_w + 14.0f, unit_y, unit_w, unit_h, unit_stroke_r, unit_gap, unit_buf, C_NEON_CYAN);
+    // Render Real Arial unit in Neon Cyan with cyan halo glow aligned to baseline
+    draw_arial_string(hero_x + num_total_w + gap, hero_y, font_arial_unit, unit_buf, C_NEON_CYAN, C_NEON_CYAN);
 
     // 3. BOTTOM METRICS: 2 Columns (Voltage on Left | Current on Right)
-    // Rendered with large, smooth anti-aliased vector typography
-    float bottom_lbl_y = 154.0f;
-    float bottom_val_y = 178.0f;
-    float lbl_w = 11.0f, lbl_h = 17.0f, lbl_r = 1.5f, lbl_gap = 3.0f;
-    float val_w = 21.0f, val_h = 36.0f, val_r = 2.8f, val_gap = 4.5f;
+    int bottom_lbl_y = 172;
+    int bottom_val_y = 218;
 
     // Metric 1: Voltage (Left aligned at x=24)
-    draw_smooth_string(24.0f, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "VOLTAGE", C_MUTED_GRAY);
+    draw_arial_string(24, bottom_lbl_y, font_arial_label, "VOLTAGE", C_MUTED_GRAY, 0);
 
     char volt_buf[32];
     snprintf(volt_buf, sizeof(volt_buf), "%dV", (int)roundf(state->voltage_v));
-    draw_smooth_string(24.0f, bottom_val_y, val_w, val_h, val_r, val_gap, volt_buf, C_AMBER_GOLD);
+    draw_arial_string(24, bottom_val_y, font_arial_metric, volt_buf, C_AMBER_GOLD, C_AMBER_GOLD);
 
     // Metric 2: Current (Right aligned at x=LCD_WIDTH - width - 24)
     char curr_buf[32];
     snprintf(curr_buf, sizeof(curr_buf), "%.2fA", state->current_a);
-    float c_val_w = smooth_string_width(val_w, val_gap, curr_buf);
-    float c_lbl_w = smooth_string_width(lbl_w, lbl_gap, "CURRENT");
-    float c_val_x = (float)LCD_WIDTH - c_val_w - 24.0f;
-    float c_lbl_x = (float)LCD_WIDTH - c_lbl_w - 24.0f;
+    int c_lbl_w = arial_string_width(font_arial_label, "CURRENT");
+    int c_val_w = arial_string_width(font_arial_metric, curr_buf);
+    int c_lbl_x = LCD_WIDTH - c_lbl_w - 24;
+    int c_val_x = LCD_WIDTH - c_val_w - 24;
 
-    draw_smooth_string(c_lbl_x, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "CURRENT", C_MUTED_GRAY);
-    draw_smooth_string(c_val_x, bottom_val_y, val_w, val_h, val_r, val_gap, curr_buf, C_SKY_BLUE);
+    draw_arial_string(c_lbl_x, bottom_lbl_y, font_arial_label, "CURRENT", C_MUTED_GRAY, 0);
+    draw_arial_string(c_val_x, bottom_val_y, font_arial_metric, curr_buf, C_SKY_BLUE, C_SKY_BLUE);
 
     // Push full frame to AMOLED
     rm67162_push_frame(s_fb);
     if (s_ui_mutex) xSemaphoreGive(s_ui_mutex);
 }
+
 
