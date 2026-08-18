@@ -51,16 +51,7 @@ static void draw_pixel(int x, int y, uint16_t color)
     }
 }
 
-static void fill_circle(int cx, int cy, int r, uint16_t color)
-{
-    for (int y = -r; y <= r; y++) {
-        for (int x = -r; x <= r; x++) {
-            if (x * x + y * y <= r * r) {
-                draw_pixel(cx + x, cy + y, color);
-            }
-        }
-    }
-}
+
 
 static inline void blend_pixel(int x, int y, uint16_t color, uint8_t alpha)
 {
@@ -123,9 +114,25 @@ static void fill_rect(int x1, int y1, int w, int h, uint16_t color)
     if (x2 > LCD_WIDTH) x2 = LCD_WIDTH;
     if (y2 > LCD_HEIGHT) y2 = LCD_HEIGHT;
 
+    uint16_t c_swapped = (color >> 8) | (color << 8);
     for (int y = y1; y < y2; y++) {
         for (int x = x1; x < x2; x++) {
-            s_fb[y * LCD_WIDTH + x] = color;
+            s_fb[y * LCD_WIDTH + x] = c_swapped;
+        }
+    }
+}
+
+static void fill_circle(int cx, int cy, int r, uint16_t color)
+{
+    uint16_t c_swapped = (color >> 8) | (color << 8);
+    for (int dy = -r; dy <= r; dy++) {
+        for (int dx = -r; dx <= r; dx++) {
+            if (dx * dx + dy * dy <= r * r) {
+                int px = cx + dx, py = cy + dy;
+                if (px >= 0 && px < LCD_WIDTH && py >= 0 && py < LCD_HEIGHT) {
+                    s_fb[py * LCD_WIDTH + px] = c_swapped;
+                }
+            }
         }
     }
 }
@@ -138,25 +145,52 @@ static void draw_rounded_rect(int x, int y, int w, int h, int r, uint16_t bg, ui
 
     for (int cx = 0; cx < r; cx++) {
         for (int cy = 0; cy < r; cy++) {
-            if ((cx - r + 1) * (cx - r + 1) + (cy - r + 1) * (cy - r + 1) <= r * r) {
-                draw_pixel(x + r - 1 - cx, y + r - 1 - cy, bg);
-                draw_pixel(x + w - r + cx, y + r - 1 - cy, bg);
-                draw_pixel(x + r - 1 - cx, y + h - r + cy, bg);
-                draw_pixel(x + w - r + cx, y + h - r + cy, bg);
+            if ((r - 1 - cx) * (r - 1 - cx) + (r - 1 - cy) * (r - 1 - cy) < r * r) {
+                draw_pixel(x + cx, y + cy, bg);
+                draw_pixel(x + w - 1 - cx, y + cy, bg);
+                draw_pixel(x + cx, y + h - 1 - cy, bg);
+                draw_pixel(x + w - 1 - cx, y + h - 1 - cy, bg);
             }
         }
     }
+}
 
-    if (border != bg) {
-        for (int i = x + r; i < x + w - r; i++) {
-            draw_pixel(i, y, border);
-            draw_pixel(i, y + h - 1, border);
-        }
-        for (int i = y + r; i < y + h - r; i++) {
-            draw_pixel(x, i, border);
-            draw_pixel(x + w - 1, i, border);
+static void draw_glowing_pill(int x, int y, int w, int h, int r, uint16_t bg_color, uint16_t glow_color)
+{
+    for (int dy = -6; dy < h + 6; dy++) {
+        for (int dx = -6; dx < w + 6; dx++) {
+            int px = x + dx;
+            int py = y + dy;
+            if (px < 0 || px >= LCD_WIDTH || py < 0 || py >= LCD_HEIGHT) continue;
+
+            int qx = (dx < r) ? (r - dx) : ((dx >= w - r) ? (dx - (w - r - 1)) : 0);
+            int qy = (dy < r) ? (r - dy) : ((dy >= h - r) ? (dy - (h - r - 1)) : 0);
+            float dist = sqrtf((float)(qx * qx + qy * qy));
+            if (dist > (float)r && dist <= (float)(r + 6)) {
+                float f = ((float)(r + 6) - dist) / 6.0f;
+                uint8_t a = (uint8_t)(f * f * 120.0f);
+                if (a > 0) blend_pixel_glow(px, py, glow_color, a);
+            }
         }
     }
+    draw_rounded_rect(x, y, w, h, r, bg_color, bg_color);
+}
+
+static void draw_glowing_dot(int cx, int cy, uint16_t core_color, uint16_t glow_color)
+{
+    for (int dy = -12; dy <= 12; dy++) {
+        for (int dx = -12; dx <= 12; dx++) {
+            int px = cx + dx, py = cy + dy;
+            if (px < 0 || px >= LCD_WIDTH || py < 0 || py >= LCD_HEIGHT) continue;
+            float dist = sqrtf((float)(dx * dx + dy * dy));
+            if (dist <= 12.0f) {
+                float f = (12.0f - dist) / 12.0f;
+                uint8_t a = (uint8_t)(f * f * 140.0f);
+                if (a > 0) blend_pixel_glow(px, py, glow_color, a);
+            }
+        }
+    }
+    fill_circle(cx, cy, 5, core_color);
 }
 
 // ── Real Arial TrueType Font Rendering Engine with Precomputed Edge Glow ─────
@@ -295,7 +329,7 @@ void display_ui_show_splash(const char *status_text, const char *subtext)
     // Logo / Title in Arial
     const char *title = "TAPO P116M";
     int tw = arial_string_width(font_arial_metric, title);
-    draw_arial_string((LCD_WIDTH - tw) / 2, 70, font_arial_metric, title, C_CYAN, C_CYAN);
+    draw_arial_string((LCD_WIDTH - tw) / 2, 75, font_arial_metric, title, C_CYAN, C_CYAN);
 
     // Accent line
     fill_rect(80, 100, LCD_WIDTH - 160, 2, C_CARD_BORDER);
@@ -303,12 +337,12 @@ void display_ui_show_splash(const char *status_text, const char *subtext)
     // Status text in Arial
     if (status_text) {
         int sw = arial_string_width(font_arial_label, status_text);
-        draw_arial_string((LCD_WIDTH - sw) / 2, 140, font_arial_label, status_text, C_EMERALD, C_EMERALD);
+        draw_arial_string((LCD_WIDTH - sw) / 2, 145, font_arial_label, status_text, C_EMERALD, C_EMERALD);
     }
 
     if (subtext) {
         int subw = arial_string_width(font_arial_label, subtext);
-        draw_arial_string((LCD_WIDTH - subw) / 2, 180, font_arial_label, subtext, C_TEXT_MUTED, 0);
+        draw_arial_string((LCD_WIDTH - subw) / 2, 185, font_arial_label, subtext, C_TEXT_MUTED, 0);
     }
 
     rm67162_push_frame(s_fb);
@@ -323,32 +357,20 @@ void display_ui_update(const ui_state_t *state)
     memset(s_fb, 0, LCD_WIDTH * LCD_HEIGHT * sizeof(uint16_t));
 
     // 1. TOP HEADER: Status Dot with Glow + "TAPO P116M" + Glowing Pill ON/OFF Badge
-    int dotX = 24, dotY = 22;
-    if (state->is_on) {
-        fill_circle(dotX, dotY, 7, C_GLOW_EMERALD);
-        fill_circle(dotX, dotY, 4, C_EMERALD);
-    } else {
-        fill_circle(dotX, dotY, 7, C_GLOW_RED);
-        fill_circle(dotX, dotY, 4, C_RED);
-    }
+    draw_glowing_dot(28, 26, state->is_on ? C_EMERALD : C_RED, state->is_on ? C_EMERALD : C_RED);
     
     // Top Title: TAPO P116M (Real Arial Font in Muted Silver-Gray)
-    draw_arial_string(38, 27, font_arial_label, "TAPO P116M", C_MUTED_GRAY, 0);
+    draw_arial_string(44, 32, font_arial_label, "TAPO P116M", C_MUTED_GRAY, 0);
 
     // Top Right: Compact Glowing ON / OFF Rounded Pill Badge
-    int pW = 56, pH = 26, pR = 12;
-    int pX = LCD_WIDTH - pW - 24, pY = 9;
-    if (state->is_on) {
-        draw_rounded_rect(pX - 1, pY - 1, pW + 2, pH + 2, pR + 1, C_GLOW_EMERALD, C_GLOW_EMERALD);
-        draw_rounded_rect(pX, pY, pW, pH, pR, C_EMERALD, C_EMERALD);
-        int on_w = arial_string_width(font_arial_label, "ON");
-        draw_arial_string(pX + (pW - on_w) / 2, pY + 19, font_arial_label, "ON", C_BLACK, 0);
-    } else {
-        draw_rounded_rect(pX - 1, pY - 1, pW + 2, pH + 2, pR + 1, C_GLOW_RED, C_GLOW_RED);
-        draw_rounded_rect(pX, pY, pW, pH, pR, C_RED, C_RED);
-        int off_w = arial_string_width(font_arial_label, "OFF");
-        draw_arial_string(pX + (pW - off_w) / 2, pY + 19, font_arial_label, "OFF", C_WHITE, 0);
-    }
+    int pW = 60, pH = 26, pR = 13;
+    int pX = LCD_WIDTH - pW - 24, pY = 13;
+    draw_glowing_pill(pX, pY, pW, pH, pR, state->is_on ? C_EMERALD : C_RED, state->is_on ? C_EMERALD : C_RED);
+    
+    const char *badge_text = state->is_on ? "ON" : "OFF";
+    int badge_w = arial_string_width(font_arial_label, badge_text);
+    uint16_t badge_text_color = state->is_on ? C_BLACK : C_WHITE;
+    draw_arial_string(pX + (pW - badge_w) / 2, pY + 19, font_arial_label, badge_text, badge_text_color, 0);
 
     // 2. HERO METRIC: Active Power (Real Arial Bold Digits + Real Arial Cyan Unit)
     char power_buf[32];
@@ -368,19 +390,19 @@ void display_ui_update(const ui_state_t *state)
     int total_hero_w = num_total_w + gap + unit_total_w;
 
     int hero_x = (LCD_WIDTH - total_hero_w) / 2;
-    int hero_y = 136; // Baseline alignment for Arial 118pt
+    int hero_y = 152; // Perfectly centered vertical baseline for Arial 122pt
 
     // Render Real Arial Bold power digits with luminous white halo glow
-    uint16_t power_color = state->is_on ? C_WHITE : rgb565(120, 120, 130);
-    uint16_t power_glow  = state->is_on ? C_WHITE : rgb565(40, 40, 50);
+    uint16_t power_color = state->is_on ? C_WHITE : rgb565(140, 140, 150);
+    uint16_t power_glow  = state->is_on ? C_WHITE : rgb565(50, 50, 60);
     draw_arial_string(hero_x, hero_y, font_arial_hero, power_buf, power_color, power_glow);
 
     // Render Real Arial unit in Neon Cyan with cyan halo glow aligned to baseline
     draw_arial_string(hero_x + num_total_w + gap, hero_y, font_arial_unit, unit_buf, C_NEON_CYAN, C_NEON_CYAN);
 
     // 3. BOTTOM METRICS: 2 Columns (Voltage on Left | Current on Right)
-    int bottom_lbl_y = 172;
-    int bottom_val_y = 218;
+    int bottom_lbl_y = 188;
+    int bottom_val_y = 226;
 
     // Metric 1: Voltage (Left aligned at x=24)
     draw_arial_string(24, bottom_lbl_y, font_arial_label, "VOLTAGE", C_MUTED_GRAY, 0);
@@ -404,5 +426,3 @@ void display_ui_update(const ui_state_t *state)
     rm67162_push_frame(s_fb);
     if (s_ui_mutex) xSemaphoreGive(s_ui_mutex);
 }
-
-
