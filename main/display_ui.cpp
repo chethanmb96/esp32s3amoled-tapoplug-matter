@@ -159,12 +159,12 @@ static void draw_rounded_rect(int x, int y, int w, int h, int r, uint16_t bg, ui
     }
 }
 
-// ── Smooth Anti-Aliased Vector Typography Engine with Edge Glow ──────────────
+// ── Smooth Anti-Aliased Vector Typography Engine with Edge Bloom Halo ─────────
 static void draw_smooth_segment(float x1, float y1, float x2, float y2, float r, uint16_t color)
 {
     float dx = x2 - x1, dy = y2 - y1;
     float len2 = dx * dx + dy * dy;
-    float max_reach = r + 3.0f; // includes soft edge glow aura
+    float max_reach = r + 5.5f; // Multi-layer soft luminous bloom halo
     int min_x = (int)floorf(fminf(x1, x2) - max_reach);
     int max_x = (int)ceilf(fmaxf(x1, x2) + max_reach);
     int min_y = (int)floorf(fminf(y1, y2) - max_reach);
@@ -189,12 +189,19 @@ static void draw_smooth_segment(float x1, float y1, float x2, float y2, float r,
 
             if (dist <= r - 0.5f) {
                 draw_pixel(x, y, color);
-            } else if (dist <= r + 0.5f) {
-                uint8_t a = (uint8_t)((r + 0.5f - dist) * 255.0f);
+            } else if (dist <= r + 0.6f) {
+                // Core anti-aliasing
+                uint8_t a = (uint8_t)((r + 0.6f - dist) * 255.0f);
                 blend_pixel(x, y, color, a);
-            } else if (dist <= r + 3.0f) {
-                float g_factor = (r + 3.0f - dist) / 2.5f;
-                uint8_t glow_a = (uint8_t)(g_factor * g_factor * 85.0f);
+            } else if (dist <= r + 2.4f) {
+                // Inner bright luminous glow
+                float f = (r + 2.4f - dist) / 1.8f;
+                uint8_t glow_a = (uint8_t)(f * f * 115.0f);
+                if (glow_a > 0) blend_pixel_glow(x, y, color, glow_a);
+            } else if (dist <= r + 5.5f) {
+                // Outer diffused bloom halo
+                float f = (r + 5.5f - dist) / 3.1f;
+                uint8_t glow_a = (uint8_t)(f * f * 48.0f);
                 if (glow_a > 0) blend_pixel_glow(x, y, color, glow_a);
             }
         }
@@ -207,114 +214,147 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
     float y1 = y + r, y2 = y + h - r;
     float xm = x + w * 0.5f;
     float ym = y + h * 0.5f;
-
-    // Convert lowercase to uppercase if not specifically handled
-    if (c >= 'a' && c <= 'z' && c != 'k' && c != 'h') {
-        c = c - 'a' + 'A';
-    }
+    float rc_w = w * 0.22f;
+    float rc_h = h * 0.16f;
 
     switch (c) {
     case '0':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x2, y2, r, color);
-        draw_smooth_segment(x2, y2, x1, y2, r, color);
-        draw_smooth_segment(x1, y2, x1, y1, r, color);
+        // Modern rounded stadium / capsule
+        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
+        draw_smooth_segment(x1, y2 - rc_h, x1, y1 + rc_h, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
+        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
         break;
     case '1':
         draw_smooth_segment(xm, y1, xm, y2, r, color);
-        draw_smooth_segment(x + w * 0.2f, y + h * 0.28f, xm, y1, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        draw_smooth_segment(x + w * 0.22f, y + h * 0.26f, xm, y1, r, color);
         break;
     case '2':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, x1, y2, r, color);
+        // Smooth rounded top, sweeping diagonal, flat baseline
+        draw_smooth_segment(x1, y1 + rc_h, x1 + rc_w, y1, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x2, y1 + h * 0.32f, r, color);
+        draw_smooth_segment(x2, y1 + h * 0.32f, x1, y2, r, color);
         draw_smooth_segment(x1, y2, x2, y2, r, color);
         break;
     case '3':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x2, y2, r, color);
-        draw_smooth_segment(x + w * 0.35f, ym, x2, ym, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        // Modern rounded 3 with center inward junction
+        draw_smooth_segment(x1, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x2, ym - h * 0.06f, r, color);
+        draw_smooth_segment(x2, ym - h * 0.06f, xm + w * 0.05f, ym, r, color);
+        draw_smooth_segment(xm + w * 0.05f, ym, x2, ym + h * 0.06f, r, color);
+        draw_smooth_segment(x2, ym + h * 0.06f, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
+        draw_smooth_segment(x1 + rc_w, y2, x1, y2 - rc_h, r, color);
         break;
     case '4':
-        draw_smooth_segment(x1, y1, x1, ym + h * 0.05f, r, color);
-        draw_smooth_segment(x1, ym + h * 0.05f, x2, ym + h * 0.05f, r, color);
-        draw_smooth_segment(x + w * 0.72f, y1, x + w * 0.72f, y2, r, color);
+        // Classic modern geometric 4: vertical right stem + diagonal left arm + crossbar
+        draw_smooth_segment(x + w * 0.74f, y1, x + w * 0.74f, y2, r, color);
+        draw_smooth_segment(x + w * 0.74f, y1, x1, ym + h * 0.12f, r, color);
+        draw_smooth_segment(x1, ym + h * 0.12f, x2, ym + h * 0.12f, r, color);
         break;
     case '5':
         draw_smooth_segment(x2, y1, x1, y1, r, color);
-        draw_smooth_segment(x1, y1, x1, ym, r, color);
-        draw_smooth_segment(x1, ym, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, x2, y2, r, color);
-        draw_smooth_segment(x2, y2, x1, y2, r, color);
+        draw_smooth_segment(x1, y1, x1, ym - h * 0.02f, r, color);
+        draw_smooth_segment(x1, ym - h * 0.02f, x2 - rc_w, ym - h * 0.02f, r, color);
+        draw_smooth_segment(x2 - rc_w, ym - h * 0.02f, x2, ym + rc_h, r, color);
+        draw_smooth_segment(x2, ym + rc_h, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x1, y2, r, color);
         break;
     case '6':
-        draw_smooth_segment(x2, y1, x1, y1, r, color);
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, ym, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, x2, y2, r, color);
-        draw_smooth_segment(x2, y2, x1, y2, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x1 + rc_w, y1, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
+        draw_smooth_segment(x1, y1 + rc_h, x1, y2 - rc_h, r, color);
+        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
+        draw_smooth_segment(x1 + rc_w, y2, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x2, y2 - rc_h, x2, ym, r, color);
+        draw_smooth_segment(x2, ym, x1, ym, r, color);
         break;
     case '7':
         draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x1 + w * 0.1f, y2, r, color);
+        draw_smooth_segment(x2, y1, x1 + w * 0.15f, y2, r, color);
         break;
     case '8':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x2, y1, x2, y2, r, color);
-        draw_smooth_segment(x1, ym, x2, ym, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x1 + rc_w, ym, x2 - rc_w, ym, r, color);
+        draw_smooth_segment(x1 + rc_w, y2, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x1, y1 + rc_h, x1, ym - rc_h, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x2, ym - rc_h, r, color);
+        draw_smooth_segment(x1, ym + rc_h, x1, y2 - rc_h, r, color);
+        draw_smooth_segment(x2, ym + rc_h, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
+        draw_smooth_segment(x1, ym - rc_h, x1 + rc_w, ym, r, color);
+        draw_smooth_segment(x2, ym - rc_h, x2 - rc_w, ym, r, color);
+        draw_smooth_segment(x1 + rc_w, ym, x1, ym + rc_h, r, color);
+        draw_smooth_segment(x2 - rc_w, ym, x2, ym + rc_h, r, color);
+        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
+        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
         break;
     case '9':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x1, y1, x1, ym, r, color);
-        draw_smooth_segment(x1, ym, x2, ym, r, color);
-        draw_smooth_segment(x2, y1, x2, y2, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        draw_smooth_segment(x1 + rc_w, ym, x2, ym, r, color);
+        draw_smooth_segment(x1, ym - rc_h, x1, y1 + rc_h, r, color);
+        draw_smooth_segment(x1, y1 + rc_h, x1 + rc_w, y1, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
         break;
     case 'A':
         draw_smooth_segment(x1, y2, xm, y1, r, color);
         draw_smooth_segment(xm, y1, x2, y2, r, color);
-        draw_smooth_segment(x + w * 0.22f, ym + h * 0.1f, x + w * 0.78f, ym + h * 0.1f, r, color);
+        draw_smooth_segment(x + w * 0.22f, ym + h * 0.12f, x + w * 0.78f, ym + h * 0.12f, r, color);
         break;
     case 'B':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y1, x2 - w * 0.15f, y1, r, color);
-        draw_smooth_segment(x2 - w * 0.15f, y1, x2, y1 + h * 0.25f, r, color);
-        draw_smooth_segment(x2, y1 + h * 0.25f, x1, ym, r, color);
-        draw_smooth_segment(x1, ym, x2, ym + h * 0.25f, r, color);
-        draw_smooth_segment(x2, ym + h * 0.25f, x2 - w * 0.15f, y2, r, color);
-        draw_smooth_segment(x2 - w * 0.15f, y2, x1, y2, r, color);
+        draw_smooth_segment(x1, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x1, ym, r, color);
+        draw_smooth_segment(x1, ym, x2, ym + rc_h, r, color);
+        draw_smooth_segment(x2, ym + rc_h, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x1, y2, r, color);
         break;
     case 'C':
-        draw_smooth_segment(x2, y1, x1, y1, r, color);
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        draw_smooth_segment(x2, y1, x1 + rc_w, y1, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
+        draw_smooth_segment(x1, y1 + rc_h, x1, y2 - rc_h, r, color);
+        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
+        draw_smooth_segment(x1 + rc_w, y2, x2, y2, r, color);
         break;
     case 'D':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y1, x2 - w * 0.2f, y1, r, color);
-        draw_smooth_segment(x2 - w * 0.2f, y1, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, x2 - w * 0.2f, y2, r, color);
-        draw_smooth_segment(x2 - w * 0.2f, y2, x1, y2, r, color);
+        draw_smooth_segment(x1, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x2, ym, r, color);
+        draw_smooth_segment(x2, ym, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x1, y2, r, color);
         break;
     case 'E':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
         draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x1, ym, x2 - w * 0.2f, ym, r, color);
+        draw_smooth_segment(x1, ym, x2 - w * 0.18f, ym, r, color);
         draw_smooth_segment(x1, y2, x2, y2, r, color);
         break;
     case 'F':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
         draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x1, ym, x2 - w * 0.2f, ym, r, color);
+        draw_smooth_segment(x1, ym, x2 - w * 0.18f, ym, r, color);
         break;
     case 'G':
-        draw_smooth_segment(x2, y1, x1, y1, r, color);
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
+        draw_smooth_segment(x2, y1, x1 + rc_w, y1, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
+        draw_smooth_segment(x1, y1 + rc_h, x1, y2 - rc_h, r, color);
+        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
+        draw_smooth_segment(x1 + rc_w, y2, x2, y2, r, color);
         draw_smooth_segment(x2, y2, x2, ym, r, color);
         draw_smooth_segment(x2, ym, xm, ym, r, color);
         break;
@@ -324,20 +364,17 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
         draw_smooth_segment(x1, ym, x2, ym, r, color);
         break;
     case 'I':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
         draw_smooth_segment(xm, y1, xm, y2, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
         break;
     case 'J':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2 - w * 0.2f, y1, x2 - w * 0.2f, y2 - h * 0.2f, r, color);
-        draw_smooth_segment(x2 - w * 0.2f, y2 - h * 0.2f, xm, y2, r, color);
-        draw_smooth_segment(xm, y2, x1, y2 - h * 0.2f, r, color);
+        draw_smooth_segment(x2, y1, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x1, y2 - rc_h, r, color);
         break;
     case 'K':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
         draw_smooth_segment(x2, y1, x1, ym, r, color);
-        draw_smooth_segment(x1 + w * 0.2f, ym, x2, y2, r, color);
+        draw_smooth_segment(x1 + w * 0.15f, ym, x2, y2, r, color);
         break;
     case 'L':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
@@ -355,55 +392,68 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
         draw_smooth_segment(x2, y2, x2, y1, r, color);
         break;
     case 'O':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x2, y2, r, color);
-        draw_smooth_segment(x2, y2, x1, y2, r, color);
-        draw_smooth_segment(x1, y2, x1, y1, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
+        draw_smooth_segment(x1, y2 - rc_h, x1, y1 + rc_h, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
+        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
         break;
     case 'P':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, x1, ym, r, color);
+        draw_smooth_segment(x1, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x2, ym - rc_h, r, color);
+        draw_smooth_segment(x2, ym - rc_h, x2 - rc_w, ym, r, color);
+        draw_smooth_segment(x2 - rc_w, ym, x1, ym, r, color);
         break;
     case 'Q':
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x2, y2, r, color);
-        draw_smooth_segment(x2, y2, x1, y2, r, color);
-        draw_smooth_segment(x1, y2, x1, y1, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
+        draw_smooth_segment(x1, y2 - rc_h, x1, y1 + rc_h, r, color);
         draw_smooth_segment(xm, ym + h * 0.15f, x2 + w * 0.1f, y2 + h * 0.1f, r, color);
         break;
     case 'R':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, x1, ym, r, color);
-        draw_smooth_segment(x1 + w * 0.3f, ym, x2, y2, r, color);
+        draw_smooth_segment(x1, y1, x2 - rc_w, y1, r, color);
+        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x2, ym - rc_h, r, color);
+        draw_smooth_segment(x2, ym - rc_h, x2 - rc_w, ym, r, color);
+        draw_smooth_segment(x2 - rc_w, ym, x1, ym, r, color);
+        draw_smooth_segment(x1 + w * 0.25f, ym, x2, y2, r, color);
         break;
     case 'S':
-        draw_smooth_segment(x2, y1, x1, y1, r, color);
-        draw_smooth_segment(x1, y1, x1, ym, r, color);
-        draw_smooth_segment(x1, ym, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, x2, y2, r, color);
-        draw_smooth_segment(x2, y2, x1, y2, r, color);
+        draw_smooth_segment(x2, y1, x1 + rc_w, y1, r, color);
+        draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
+        draw_smooth_segment(x1, y1 + rc_h, x2, ym + rc_h, r, color);
+        draw_smooth_segment(x2, ym + rc_h, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x1, y2, r, color);
         break;
     case 'T':
         draw_smooth_segment(x1, y1, x2, y1, r, color);
         draw_smooth_segment(xm, y1, xm, y2, r, color);
         break;
     case 'U':
-        draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, y2, x2, y2, r, color);
-        draw_smooth_segment(x2, y2, x2, y1, r, color);
+        draw_smooth_segment(x1, y1, x1, y2 - rc_h, r, color);
+        draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
+        draw_smooth_segment(x1 + rc_w, y2, x2 - rc_w, y2, r, color);
+        draw_smooth_segment(x2 - rc_w, y2, x2, y2 - rc_h, r, color);
+        draw_smooth_segment(x2, y2 - rc_h, x2, y1, r, color);
         break;
     case 'V':
         draw_smooth_segment(x1, y1, xm, y2, r, color);
         draw_smooth_segment(xm, y2, x2, y1, r, color);
         break;
     case 'W':
+    case 'w':
+        // Modern geometric lowercase w (or W)
         draw_smooth_segment(x1, y1, x + w * 0.28f, y2, r, color);
-        draw_smooth_segment(x + w * 0.28f, y2, xm, y + h * 0.35f, r, color);
-        draw_smooth_segment(xm, y + h * 0.35f, x + w * 0.72f, y2, r, color);
+        draw_smooth_segment(x + w * 0.28f, y2, xm, y1 + h * 0.35f, r, color);
+        draw_smooth_segment(xm, y1 + h * 0.35f, x + w * 0.72f, y2, r, color);
         draw_smooth_segment(x + w * 0.72f, y2, x2, y1, r, color);
         break;
     case 'X':
@@ -422,20 +472,21 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
         break;
     case 'k':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x2, y + h * 0.35f, x1, ym + h * 0.1f, r, color);
-        draw_smooth_segment(x1, ym + h * 0.1f, x2, y2, r, color);
+        draw_smooth_segment(x2, y + h * 0.32f, x1, ym + h * 0.08f, r, color);
+        draw_smooth_segment(x1, ym + h * 0.08f, x2, y2, r, color);
         break;
     case 'h':
         draw_smooth_segment(x1, y1, x1, y2, r, color);
-        draw_smooth_segment(x1, ym, x2, ym, r, color);
-        draw_smooth_segment(x2, ym, x2, y2, r, color);
+        draw_smooth_segment(x1, ym, x2 - rc_w, ym, r, color);
+        draw_smooth_segment(x2 - rc_w, ym, x2, ym + rc_h, r, color);
+        draw_smooth_segment(x2, ym + rc_h, x2, y2, r, color);
         break;
     case '.':
-        draw_smooth_segment(xm, y2 - r * 0.5f, xm, y2 - r * 0.5f, r * 1.2f, color);
+        draw_smooth_segment(xm, y2 - r * 0.6f, xm, y2 - r * 0.6f, r * 1.3f, color);
         break;
     case ':':
-        draw_smooth_segment(xm, ym - h * 0.25f, xm, ym - h * 0.25f, r * 1.1f, color);
-        draw_smooth_segment(xm, ym + h * 0.25f, xm, ym + h * 0.25f, r * 1.1f, color);
+        draw_smooth_segment(xm, ym - h * 0.25f, xm, ym - h * 0.25f, r * 1.2f, color);
+        draw_smooth_segment(xm, ym + h * 0.25f, xm, ym + h * 0.25f, r * 1.2f, color);
         break;
     case '-':
         draw_smooth_segment(x1, ym, x2, ym, r, color);
