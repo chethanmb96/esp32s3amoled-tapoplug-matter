@@ -219,7 +219,7 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
 
     switch (c) {
     case '0':
-        // Modern rounded stadium / capsule
+        // Arial-style smooth rounded rectangle / stadium
         draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
         draw_smooth_segment(x2, y1 + rc_h, x2, y2 - rc_h, r, color);
         draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
@@ -230,46 +230,47 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
         draw_smooth_segment(x1, y2 - rc_h, x1 + rc_w, y2, r, color);
         break;
     case '1':
+        // Arial '1' with sharp angled top-left flag
         draw_smooth_segment(xm, y1, xm, y2, r, color);
-        draw_smooth_segment(x + w * 0.22f, y + h * 0.26f, xm, y1, r, color);
+        draw_smooth_segment(x + w * 0.18f, y + h * 0.24f, xm, y1, r, color);
         break;
     case '2':
-        // Smooth rounded top, sweeping diagonal, flat baseline
+        // Arial '2': smooth round top arch, diagonal sweep down to bottom left, flat base
         draw_smooth_segment(x1, y1 + rc_h, x1 + rc_w, y1, r, color);
         draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
         draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x2, y1 + h * 0.32f, r, color);
-        draw_smooth_segment(x2, y1 + h * 0.32f, x1, y2, r, color);
+        draw_smooth_segment(x2, y1 + rc_h, x2, y1 + h * 0.34f, r, color);
+        draw_smooth_segment(x2, y1 + h * 0.34f, x1, y2, r, color);
         draw_smooth_segment(x1, y2, x2, y2, r, color);
         break;
     case '3':
-        // Modern rounded 3 with center inward junction
-        draw_smooth_segment(x1, y1, x2 - rc_w, y1, r, color);
-        draw_smooth_segment(x2 - rc_w, y1, x2, y1 + rc_h, r, color);
-        draw_smooth_segment(x2, y1 + rc_h, x2, ym - h * 0.06f, r, color);
-        draw_smooth_segment(x2, ym - h * 0.06f, xm + w * 0.05f, ym, r, color);
-        draw_smooth_segment(xm + w * 0.05f, ym, x2, ym + h * 0.06f, r, color);
-        draw_smooth_segment(x2, ym + h * 0.06f, x2, y2 - rc_h, r, color);
+        // Arial '3': flat top bar, angled diagonal to center, rounded lower bowl with upturn
+        draw_smooth_segment(x1, y1, x2, y1, r, color);
+        draw_smooth_segment(x2, y1, xm + w * 0.08f, ym, r, color);
+        draw_smooth_segment(xm + w * 0.08f, ym, x2, ym + h * 0.08f, r, color);
+        draw_smooth_segment(x2, ym + h * 0.08f, x2, y2 - rc_h, r, color);
         draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
         draw_smooth_segment(x2 - rc_w, y2, x1 + rc_w, y2, r, color);
         draw_smooth_segment(x1 + rc_w, y2, x1, y2 - rc_h, r, color);
         break;
     case '4':
-        // Classic modern geometric 4: vertical right stem + diagonal left arm + crossbar
+        // Arial '4': vertical stem on right, sharp diagonal left arm, horizontal crossbar
         draw_smooth_segment(x + w * 0.74f, y1, x + w * 0.74f, y2, r, color);
         draw_smooth_segment(x + w * 0.74f, y1, x1, ym + h * 0.12f, r, color);
         draw_smooth_segment(x1, ym + h * 0.12f, x2, ym + h * 0.12f, r, color);
         break;
     case '5':
+        // Arial '5': top horizontal bar, vertical drop, rounded lower bowl
         draw_smooth_segment(x2, y1, x1, y1, r, color);
-        draw_smooth_segment(x1, y1, x1, ym - h * 0.02f, r, color);
-        draw_smooth_segment(x1, ym - h * 0.02f, x2 - rc_w, ym - h * 0.02f, r, color);
-        draw_smooth_segment(x2 - rc_w, ym - h * 0.02f, x2, ym + rc_h, r, color);
+        draw_smooth_segment(x1, y1, x1, ym - h * 0.04f, r, color);
+        draw_smooth_segment(x1, ym - h * 0.04f, x2 - rc_w, ym - h * 0.04f, r, color);
+        draw_smooth_segment(x2 - rc_w, ym - h * 0.04f, x2, ym + rc_h, r, color);
         draw_smooth_segment(x2, ym + rc_h, x2, y2 - rc_h, r, color);
         draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
         draw_smooth_segment(x2 - rc_w, y2, x1, y2, r, color);
         break;
     case '6':
+        // Arial '6': smooth top-left curve down to full circular lower bowl
         draw_smooth_segment(x2 - rc_w, y1, x1 + rc_w, y1, r, color);
         draw_smooth_segment(x1 + rc_w, y1, x1, y1 + rc_h, r, color);
         draw_smooth_segment(x1, y1 + rc_h, x1, y2 - rc_h, r, color);
@@ -280,10 +281,12 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
         draw_smooth_segment(x2, ym, x1, ym, r, color);
         break;
     case '7':
+        // Arial '7': flat top bar, angled diagonal to bottom left
         draw_smooth_segment(x1, y1, x2, y1, r, color);
-        draw_smooth_segment(x2, y1, x1 + w * 0.15f, y2, r, color);
+        draw_smooth_segment(x2, y1, x1 + w * 0.2f, y2, r, color);
         break;
     case '8':
+        // Arial '8': upper and lower rounded loops
         draw_smooth_segment(x1 + rc_w, y1, x2 - rc_w, y1, r, color);
         draw_smooth_segment(x1 + rc_w, ym, x2 - rc_w, ym, r, color);
         draw_smooth_segment(x1 + rc_w, y2, x2 - rc_w, y2, r, color);
@@ -301,6 +304,7 @@ static void draw_smooth_char(float x, float y, float w, float h, float r, char c
         draw_smooth_segment(x2, y2 - rc_h, x2 - rc_w, y2, r, color);
         break;
     case '9':
+        // Arial '9': upper full circular bowl curving down to bottom-left hook
         draw_smooth_segment(x1 + rc_w, ym, x2, ym, r, color);
         draw_smooth_segment(x1, ym - rc_h, x1, y1 + rc_h, r, color);
         draw_smooth_segment(x1, y1 + rc_h, x1 + rc_w, y1, r, color);
