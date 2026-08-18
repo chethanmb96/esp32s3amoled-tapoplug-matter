@@ -26,18 +26,22 @@ static inline uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b)
     return (uint16_t)((c >> 8) | (c << 8)); // swap bytes for SPI
 }
 
-#define C_BLACK       0x0000
-#define C_WHITE       0xFFFF
-#define C_CYAN        rgb565(0, 230, 255)
-#define C_EMERALD     rgb565(16, 235, 130)
-#define C_AMBER       rgb565(255, 185, 40)
-#define C_SKY         rgb565(60, 165, 255)
-#define C_RED         rgb565(255, 60, 80)
-#define C_DARK_RED    rgb565(80, 15, 25)
-#define C_DARK_GREEN  rgb565(10, 60, 35)
-#define C_CARD_BG     rgb565(18, 20, 26)
-#define C_CARD_BORDER rgb565(40, 45, 58)
-#define C_TEXT_MUTED  rgb565(140, 150, 170)
+#define C_BLACK        0x0000
+#define C_WHITE        0xFFFF
+#define C_MUTED_GRAY   rgb565(140, 150, 170) // #8C96AA / 0x8CD2
+#define C_NEON_CYAN    rgb565(0, 230, 255)   // #00E6FF / 0x077F
+#define C_GLOW_EMERALD rgb565(0, 70, 35)     // 0x03E0 glow
+#define C_EMERALD      rgb565(0, 230, 118)   // #00E676 / 0x07E0
+#define C_GLOW_RED     rgb565(80, 10, 20)    // 0x4000 glow
+#define C_RED          rgb565(248, 0, 0)     // #F800
+#define C_AMBER_GOLD   rgb565(255, 185, 40)  // #FFB928 / 0xFD85 (Voltage)
+#define C_SKY_BLUE     rgb565(60, 165, 255)  // #78c0ffff / 0x3D3F (Current)
+#define C_TEXT_MUTED   C_MUTED_GRAY
+#define C_CYAN         C_NEON_CYAN
+#define C_AMBER        C_AMBER_GOLD
+#define C_SKY          C_SKY_BLUE
+#define C_CARD_BG      rgb565(18, 20, 26)
+#define C_CARD_BORDER  rgb565(40, 45, 58)
 
 // ── Primitive Drawing Routines ────────────────────────────────────────────────
 static void draw_pixel(int x, int y, uint16_t color)
@@ -47,10 +51,21 @@ static void draw_pixel(int x, int y, uint16_t color)
     }
 }
 
+static void fill_circle(int cx, int cy, int r, uint16_t color)
+{
+    for (int y = -r; y <= r; y++) {
+        for (int x = -r; x <= r; x++) {
+            if (x * x + y * y <= r * r) {
+                draw_pixel(cx + x, cy + y, color);
+            }
+        }
+    }
+}
+
 static inline void blend_pixel(int x, int y, uint16_t color, uint8_t alpha)
 {
     if (x < 0 || x >= LCD_WIDTH || y < 0 || y >= LCD_HEIGHT || alpha == 0) return;
-    if (alpha == 255) {
+    if (alpha >= 250) {
         s_fb[y * LCD_WIDTH + x] = color;
         return;
     }
@@ -70,6 +85,30 @@ static inline void blend_pixel(int x, int y, uint16_t color, uint8_t alpha)
     uint32_t r = (fg_r * alpha + bg_r * (255 - alpha)) / 255;
     uint32_t g = (fg_g * alpha + bg_g * (255 - alpha)) / 255;
     uint32_t b = (fg_b * alpha + bg_b * (255 - alpha)) / 255;
+
+    uint16_t res_n = (r << 11) | (g << 5) | b;
+    s_fb[y * LCD_WIDTH + x] = (res_n >> 8) | (res_n << 8);
+}
+
+static inline void blend_pixel_glow(int x, int y, uint16_t color, uint8_t alpha)
+{
+    if (x < 0 || x >= LCD_WIDTH || y < 0 || y >= LCD_HEIGHT || alpha == 0) return;
+
+    uint16_t bg = s_fb[y * LCD_WIDTH + x];
+    uint16_t bg_n = (bg >> 8) | (bg << 8);
+    uint16_t fg_n = (color >> 8) | (color << 8);
+
+    uint32_t bg_r = (bg_n >> 11) & 0x1F;
+    uint32_t bg_g = (bg_n >> 5)  & 0x3F;
+    uint32_t bg_b =  bg_n        & 0x1F;
+
+    uint32_t fg_r = (fg_n >> 11) & 0x1F;
+    uint32_t fg_g = (fg_n >> 5)  & 0x3F;
+    uint32_t fg_b =  fg_n        & 0x1F;
+
+    uint32_t r = bg_r + (fg_r * alpha) / 255; if (r > 31) r = 31;
+    uint32_t g = bg_g + (fg_g * alpha) / 255; if (g > 63) g = 63;
+    uint32_t b = bg_b + (fg_b * alpha) / 255; if (b > 31) b = 31;
 
     uint16_t res_n = (r << 11) | (g << 5) | b;
     s_fb[y * LCD_WIDTH + x] = (res_n >> 8) | (res_n << 8);
@@ -120,15 +159,16 @@ static void draw_rounded_rect(int x, int y, int w, int h, int r, uint16_t bg, ui
     }
 }
 
-// ── Smooth Anti-Aliased Vector Typography Engine ──────────────────────────────
+// ── Smooth Anti-Aliased Vector Typography Engine with Edge Glow ──────────────
 static void draw_smooth_segment(float x1, float y1, float x2, float y2, float r, uint16_t color)
 {
     float dx = x2 - x1, dy = y2 - y1;
     float len2 = dx * dx + dy * dy;
-    int min_x = (int)floorf(fminf(x1, x2) - r - 1.0f);
-    int max_x = (int)ceilf(fmaxf(x1, x2) + r + 1.0f);
-    int min_y = (int)floorf(fminf(y1, y2) - r - 1.0f);
-    int max_y = (int)ceilf(fmaxf(y1, y2) + r + 1.0f);
+    float max_reach = r + 3.0f; // includes soft edge glow aura
+    int min_x = (int)floorf(fminf(x1, x2) - max_reach);
+    int max_x = (int)ceilf(fmaxf(x1, x2) + max_reach);
+    int min_y = (int)floorf(fminf(y1, y2) - max_reach);
+    int max_y = (int)ceilf(fmaxf(y1, y2) + max_reach);
 
     if (min_x < 0) min_x = 0;
     if (min_y < 0) min_y = 0;
@@ -149,9 +189,13 @@ static void draw_smooth_segment(float x1, float y1, float x2, float y2, float r,
 
             if (dist <= r - 0.5f) {
                 draw_pixel(x, y, color);
-            } else if (dist < r + 0.5f) {
+            } else if (dist <= r + 0.5f) {
                 uint8_t a = (uint8_t)((r + 0.5f - dist) * 255.0f);
                 blend_pixel(x, y, color, a);
+            } else if (dist <= r + 3.0f) {
+                float g_factor = (r + 3.0f - dist) / 2.5f;
+                uint8_t glow_a = (uint8_t)(g_factor * g_factor * 85.0f);
+                if (glow_a > 0) blend_pixel_glow(x, y, color, glow_a);
             }
         }
     }
@@ -533,27 +577,40 @@ void display_ui_update(const ui_state_t *state)
 
     memset(s_fb, 0, LCD_WIDTH * LCD_HEIGHT * sizeof(uint16_t));
 
-    // 1. TOP HEADER: Status Dot + "TAPO P116M" (Smooth) + Borderless ON/OFF (Smooth)
-    // Connection Dot
-    uint16_t dot_color = state->is_connected ? C_EMERALD : C_AMBER;
-    draw_rounded_rect(20, 18, 12, 12, 6, dot_color, dot_color);
+    // 1. TOP HEADER: Status Dot with Glow + "TAPO P116M" + Glowing Pill ON/OFF Badge
+    int dotX = 24, dotY = 22;
+    if (state->is_on) {
+        fill_circle(dotX, dotY, 7, C_GLOW_EMERALD);
+        fill_circle(dotX, dotY, 4, C_EMERALD);
+    } else {
+        fill_circle(dotX, dotY, 7, C_GLOW_RED);
+        fill_circle(dotX, dotY, 4, C_RED);
+    }
     
-    // Top Title: TAPO P116M (Smooth Font)
-    const char *title_label = "TAPO P116M";
-    draw_smooth_string(42.0f, 14.0f, 12.0f, 20.0f, 1.6f, 3.0f, title_label, C_TEXT_MUTED);
+    // Top Title: TAPO P116M (Smooth Font in Muted Silver-Gray)
+    draw_smooth_string(38.0f, 13.0f, 11.0f, 18.0f, 1.5f, 2.5f, "TAPO P116M", C_MUTED_GRAY);
 
-    // Borderless Relay State: ON / OFF (Smooth Font)
-    const char *pill_txt = state->is_on ? "ON" : "OFF";
-    uint16_t pill_color = state->is_on ? C_EMERALD : C_RED;
-    float ptw = smooth_string_width(16.0f, 4.0f, pill_txt);
-    draw_smooth_string((float)LCD_WIDTH - ptw - 20.0f, 12.0f, 16.0f, 24.0f, 2.2f, 4.0f, pill_txt, pill_color);
+    // Top Right: Compact Glowing ON / OFF Rounded Pill Badge
+    int pW = 56, pH = 26, pR = 12;
+    int pX = LCD_WIDTH - pW - 24, pY = 9;
+    if (state->is_on) {
+        draw_rounded_rect(pX - 1, pY - 1, pW + 2, pH + 2, pR + 1, C_GLOW_EMERALD, C_GLOW_EMERALD);
+        draw_rounded_rect(pX, pY, pW, pH, pR, C_EMERALD, C_EMERALD);
+        float on_w = smooth_string_width(12.0f, 3.0f, "ON");
+        draw_smooth_string(pX + (pW - on_w) / 2.0f, pY + 4.0f, 12.0f, 18.0f, 1.8f, 3.0f, "ON", C_BLACK);
+    } else {
+        draw_rounded_rect(pX - 1, pY - 1, pW + 2, pH + 2, pR + 1, C_GLOW_RED, C_GLOW_RED);
+        draw_rounded_rect(pX, pY, pW, pH, pR, C_RED, C_RED);
+        float off_w = smooth_string_width(12.0f, 3.0f, "OFF");
+        draw_smooth_string(pX + (pW - off_w) / 2.0f, pY + 4.0f, 12.0f, 18.0f, 1.8f, 3.0f, "OFF", C_WHITE);
+    }
 
     // 2. HERO METRIC: Active Power (Smooth Anti-Aliased Vector Readout)
     char power_buf[32];
     char unit_buf[8] = "W";
     float p_val = state->power_w;
 
-    if (p_val >= 10000.0f) {
+    if (p_val >= 1000.0f) {
         snprintf(power_buf, sizeof(power_buf), "%.1f", p_val / 1000.0f);
         strcpy(unit_buf, "kW");
     } else {
@@ -561,14 +618,14 @@ void display_ui_update(const ui_state_t *state)
     }
 
     // Smooth typography parameters for Power Readout
-    float char_w = 52.0f;
-    float char_h = 96.0f;
-    float stroke_r = 4.8f;
+    float char_w = 54.0f;
+    float char_h = 98.0f;
+    float stroke_r = 5.0f;
     float gap = 10.0f;
 
-    float unit_w = 26.0f;
-    float unit_h = 40.0f;
-    float unit_stroke_r = 2.8f;
+    float unit_w = 28.0f;
+    float unit_h = 42.0f;
+    float unit_stroke_r = 3.0f;
     float unit_gap = 6.0f;
 
     float num_total_w = smooth_string_width(char_w, gap, power_buf);
@@ -578,38 +635,38 @@ void display_ui_update(const ui_state_t *state)
     float hero_x = (LCD_WIDTH - total_hero_w) / 2.0f;
     float hero_y = 48.0f;
 
-    // Render smooth anti-aliased power digits
+    // Render smooth anti-aliased power digits in Pure White
     uint16_t power_color = state->is_on ? C_WHITE : rgb565(120, 120, 130);
     draw_smooth_string(hero_x, hero_y, char_w, char_h, stroke_r, gap, power_buf, power_color);
 
-    // Render smooth unit aligned directly to the baseline
+    // Render smooth unit in Neon Cyan aligned directly to the baseline
     float unit_y = hero_y + char_h - unit_h;
-    draw_smooth_string(hero_x + num_total_w + 14.0f, unit_y, unit_w, unit_h, unit_stroke_r, unit_gap, unit_buf, C_CYAN);
+    draw_smooth_string(hero_x + num_total_w + 14.0f, unit_y, unit_w, unit_h, unit_stroke_r, unit_gap, unit_buf, C_NEON_CYAN);
 
     // 3. BOTTOM METRICS: 2 Columns (Voltage on Left | Current on Right)
     // Rendered with large, smooth anti-aliased vector typography
-    float bottom_lbl_y = 156.0f;
-    float bottom_val_y = 182.0f;
+    float bottom_lbl_y = 154.0f;
+    float bottom_val_y = 178.0f;
     float lbl_w = 11.0f, lbl_h = 17.0f, lbl_r = 1.5f, lbl_gap = 3.0f;
     float val_w = 21.0f, val_h = 36.0f, val_r = 2.8f, val_gap = 4.5f;
 
-    // Metric 1: Voltage (Left aligned at x=40)
-    draw_smooth_string(40.0f, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "VOLTAGE", C_TEXT_MUTED);
+    // Metric 1: Voltage (Left aligned at x=24)
+    draw_smooth_string(24.0f, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "VOLTAGE", C_MUTED_GRAY);
 
     char volt_buf[32];
     snprintf(volt_buf, sizeof(volt_buf), "%dV", (int)roundf(state->voltage_v));
-    draw_smooth_string(40.0f, bottom_val_y, val_w, val_h, val_r, val_gap, volt_buf, C_AMBER);
+    draw_smooth_string(24.0f, bottom_val_y, val_w, val_h, val_r, val_gap, volt_buf, C_AMBER_GOLD);
 
-    // Metric 2: Current (Right aligned at x=LCD_WIDTH - width - 40)
+    // Metric 2: Current (Right aligned at x=LCD_WIDTH - width - 24)
     char curr_buf[32];
     snprintf(curr_buf, sizeof(curr_buf), "%.2fA", state->current_a);
     float c_val_w = smooth_string_width(val_w, val_gap, curr_buf);
     float c_lbl_w = smooth_string_width(lbl_w, lbl_gap, "CURRENT");
-    float c_val_x = (float)LCD_WIDTH - c_val_w - 40.0f;
-    float c_lbl_x = (float)LCD_WIDTH - c_lbl_w - 40.0f;
+    float c_val_x = (float)LCD_WIDTH - c_val_w - 24.0f;
+    float c_lbl_x = (float)LCD_WIDTH - c_lbl_w - 24.0f;
 
-    draw_smooth_string(c_lbl_x, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "CURRENT", C_TEXT_MUTED);
-    draw_smooth_string(c_val_x, bottom_val_y, val_w, val_h, val_r, val_gap, curr_buf, C_SKY);
+    draw_smooth_string(c_lbl_x, bottom_lbl_y, lbl_w, lbl_h, lbl_r, lbl_gap, "CURRENT", C_MUTED_GRAY);
+    draw_smooth_string(c_val_x, bottom_val_y, val_w, val_h, val_r, val_gap, curr_buf, C_SKY_BLUE);
 
     // Push full frame to AMOLED
     rm67162_push_frame(s_fb);
